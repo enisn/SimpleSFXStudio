@@ -199,12 +199,6 @@ input[type='range'] {
   animation-delay: 80ms;
 }
 
-.library-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
 .panel-head {
   display: flex;
   align-items: start;
@@ -351,10 +345,6 @@ input[type='range'] {
   border-radius: 18px;
   color: var(--muted);
   background: var(--surface-muted);
-}
-
-.preset-results {
-  min-height: 0;
 }
 
 .wave-card {
@@ -778,30 +768,6 @@ input[type='range'] {
   .toggle-pill,
   .transport-actions .action-button {
     flex: 1 1 calc(33.333% - 8px);
-  }
-}
-
-@media (min-width: 981px) {
-  .preset-results {
-    max-height: clamp(320px, 50vh, 560px);
-    overflow-y: auto;
-    padding-right: 8px;
-    scrollbar-gutter: stable;
-  }
-
-  .preset-results::-webkit-scrollbar {
-    width: 10px;
-  }
-
-  .preset-results::-webkit-scrollbar-track {
-    border-radius: 999px;
-    background: var(--surface-muted);
-  }
-
-  .preset-results::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background: linear-gradient(180deg, var(--accent), var(--accent-strong)) padding-box;
   }
 }
 
