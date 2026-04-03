@@ -1,4 +1,13 @@
 export type Waveform = 'sine' | 'triangle' | 'square' | 'sawtooth'
+export type PresetCategory = 'buttons' | 'feedback' | 'alerts' | 'motion' | 'rewards'
+
+export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
+  buttons: 'Buttons',
+  feedback: 'Feedback',
+  alerts: 'Alerts',
+  motion: 'Motion',
+  rewards: 'Rewards',
+}
 
 export interface SoundParams {
   durationMs: number
@@ -18,6 +27,7 @@ export interface SoundParams {
 export interface SoundPreset {
   id: string
   name: string
+  category: PresetCategory
   tag: string
   description: string
   params: SoundParams

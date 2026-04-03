@@ -13,7 +13,12 @@ import {
 } from './audio/runtime'
 import { PRESETS, varySoundParams } from './audio/presets'
 import { renderSound } from './audio/synthesis'
-import { SOUND_LIMITS, type SoundParams, type Waveform } from './audio/types'
+import {
+  PRESET_CATEGORY_LABELS,
+  SOUND_LIMITS,
+  type SoundParams,
+  type Waveform,
+} from './audio/types'
 import {
   THEME_MODES,
   THEME_STORAGE_KEY,
@@ -36,6 +41,15 @@ const releasePreviewKeys = new Set([
 ])
 const livePreviewDelayMs = 180
 const initialPreset = PRESETS[0]
+type PresetFilter = 'all' | keyof typeof PRESET_CATEGORY_LABELS
+
+const presetFilterOptions: Array<{ id: PresetFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  ...(Object.entries(PRESET_CATEGORY_LABELS) as Array<[
+    keyof typeof PRESET_CATEGORY_LABELS,
+    string,
+  ]>).map(([id, label]) => ({ id, label })),
+]
 
 type NumericParamKey = Exclude<keyof SoundParams, 'waveform'>
 
@@ -71,11 +85,31 @@ function App({ previewTransport = browserPreviewTransport, save = downloadSound 
   const [isPlaying, setIsPlaying] = useState(false)
   const [livePreview, setLivePreview] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredThemeMode)
+  const [presetFilter, setPresetFilter] = useState<PresetFilter>('all')
+  const [presetSearch, setPresetSearch] = useState('')
   const previewTimerRef = useRef<number | null>(null)
   const playbackTokenRef = useRef(0)
   const paramsRef = useRef(params)
 
   const selectedPreset = PRESETS.find((preset) => preset.id === selectedPresetId) ?? initialPreset
+  const filteredPresets = useMemo(() => {
+    const query = presetSearch.trim().toLowerCase()
+
+    return PRESETS.filter((preset) => {
+      const matchesCategory = presetFilter === 'all' || preset.category === presetFilter
+      const matchesQuery =
+        query.length === 0 ||
+        `${preset.name} ${preset.description} ${preset.tag} ${PRESET_CATEGORY_LABELS[preset.category]}`
+          .toLowerCase()
+          .includes(query)
+
+      return matchesCategory && matchesQuery
+    })
+  }, [presetFilter, presetSearch])
+  const presetResultsLabel =
+    filteredPresets.length === PRESETS.length
+      ? `${PRESETS.length} built-in sounds ready to audition.`
+      : `Showing ${filteredPresets.length} of ${PRESETS.length} sounds.`
 
   const waveformPath = useMemo(() => {
     const samples = renderSound(params, { sampleRate: 6000, seed: 17 })
@@ -320,6 +354,67 @@ function App({ previewTransport = browserPreviewTransport, save = downloadSound 
         </div>
       </section>
 
+      <section className="wave-card current-wave-card" aria-labelledby="current-preset-title">
+        <button
+          type="button"
+          className="wave-button current-wave-button"
+          data-state={isPlaying ? 'playing' : 'idle'}
+          onClick={handleTransportToggle}
+          aria-label={isPlaying ? 'Stop current sound' : 'Play current sound'}
+        >
+          <svg
+            className="wave-graphic"
+            viewBox="0 0 720 180"
+            role="img"
+            aria-label="Waveform preview"
+          >
+            <defs>
+              <linearGradient id="waveStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#0f766e" />
+                <stop offset="52%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#d97706" />
+              </linearGradient>
+            </defs>
+            <path className="wave-line wave-line--ghost" d="M0 90 L720 90" />
+            <path className="wave-line" d={waveformPath} />
+          </svg>
+
+          <span className="wave-button-label">
+            {isPlaying ? 'Stop playback' : 'Tap waveform or press Space'}
+          </span>
+        </button>
+
+        <div className="current-wave-summary">
+          <div className="wave-copy current-wave-copy">
+            <p className="panel-kicker">Current preset</p>
+            <div className="current-wave-title-row">
+              <h2 id="current-preset-title">{selectedPreset.name}</h2>
+              <span className={`transport-state current-wave-state ${isPlaying ? 'is-playing' : ''}`}>
+                {isPlaying ? 'Playing' : 'Ready'}
+              </span>
+            </div>
+            <p>{selectedPreset.description}</p>
+          </div>
+
+          <div className="fact-row current-fact-row" aria-label="Selected sound facts">
+            <div>
+              <span>Length</span>
+              <strong>{formatMilliseconds(params.durationMs)}</strong>
+            </div>
+            <div>
+              <span>Sweep</span>
+              <strong>
+                {formatFrequency(params.startFreq)} to {formatFrequency(params.endFreq)}
+              </strong>
+            </div>
+            <div>
+              <span>Wave</span>
+              <strong>{formatWaveformLabel(params.waveform)}</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="studio-grid">
         <section className="panel library-panel" aria-labelledby="preset-library-title">
           <div className="panel-head">
@@ -327,82 +422,62 @@ function App({ previewTransport = browserPreviewTransport, save = downloadSound 
               <p className="panel-kicker">Palette</p>
               <h2 id="preset-library-title">Preset library</h2>
             </div>
-            <p className="panel-note">Pick a preset and it plays immediately so you can audition fast.</p>
+            <p className="panel-note">{presetResultsLabel}</p>
           </div>
 
-          <div className="preset-grid">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className={`preset-tile ${preset.id === selectedPresetId ? 'is-active' : ''}`}
-                aria-pressed={preset.id === selectedPresetId}
-                onClick={() => handlePresetSelect(preset.id)}
-              >
-                <span className="preset-tag">{preset.tag}</span>
-                <strong>{preset.name}</strong>
-                <span>{preset.description}</span>
-              </button>
-            ))}
-          </div>
+          <div className="library-tools">
+            <label className="search-wrap" htmlFor="preset-search">
+              <span className="search-label">Search presets</span>
+              <input
+                id="preset-search"
+                type="search"
+                className="search-input"
+                placeholder="Search click, reward, motion..."
+                value={presetSearch}
+                onChange={(event) => setPresetSearch(event.currentTarget.value)}
+              />
+            </label>
 
-          <div className="wave-card">
-            <div className="wave-copy">
-              <p className="panel-kicker">Current preset</p>
-              <h3>{selectedPreset.name}</h3>
-              <p>{selectedPreset.description}</p>
-            </div>
-
-            <button
-              type="button"
-              className="wave-button"
-              data-state={isPlaying ? 'playing' : 'idle'}
-              onClick={handleTransportToggle}
-              aria-label={isPlaying ? 'Stop current sound' : 'Play current sound'}
-            >
-              <svg
-                className="wave-graphic"
-                viewBox="0 0 720 180"
-                role="img"
-                aria-label="Waveform preview"
-              >
-                <defs>
-                  <linearGradient id="waveStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#0f766e" />
-                    <stop offset="52%" stopColor="#38bdf8" />
-                    <stop offset="100%" stopColor="#d97706" />
-                  </linearGradient>
-                </defs>
-                <path className="wave-line wave-line--ghost" d="M0 90 L720 90" />
-                <path className="wave-line" d={waveformPath} />
-              </svg>
-
-              <span className="wave-button-label">
-                {isPlaying ? 'Stop playback' : 'Tap waveform to play'}
-              </span>
-            </button>
-
-            <div className="fact-row" aria-label="Selected sound facts">
-              <div>
-                <span>Length</span>
-                <strong>{formatMilliseconds(params.durationMs)}</strong>
-              </div>
-              <div>
-                <span>Sweep</span>
-                <strong>
-                  {formatFrequency(params.startFreq)} to {formatFrequency(params.endFreq)}
-                </strong>
-              </div>
-              <div>
-                <span>Wave</span>
-                <strong>{formatWaveformLabel(params.waveform)}</strong>
-              </div>
+            <div className="filter-row" role="group" aria-label="Preset categories">
+              {presetFilterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`filter-chip ${presetFilter === option.id ? 'is-active' : ''}`}
+                  aria-pressed={presetFilter === option.id}
+                  onClick={() => setPresetFilter(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="tip-strip">
-            <strong>Shortcut:</strong> use <kbd>Space</kbd> to play or stop, keep taps under 90 ms,
-            and let success or error sounds breathe around 220-320 ms.
+          <div className="preset-results" aria-label="Preset results">
+            {filteredPresets.length > 0 ? (
+              <div className="preset-grid">
+                {filteredPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`preset-tile ${preset.id === selectedPresetId ? 'is-active' : ''}`}
+                    aria-pressed={preset.id === selectedPresetId}
+                    onClick={() => handlePresetSelect(preset.id)}
+                  >
+                    <span className="preset-meta">
+                      <span className="preset-tag">{preset.tag}</span>
+                      <span className="preset-category">{PRESET_CATEGORY_LABELS[preset.category]}</span>
+                    </span>
+                    <strong>{preset.name}</strong>
+                    <span>{preset.description}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state" role="status" aria-live="polite">
+                No presets match this search yet. Try another keyword or switch back to All.
+              </div>
+            )}
           </div>
         </section>
 

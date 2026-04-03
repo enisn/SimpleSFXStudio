@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -99,6 +99,25 @@ describe('App', () => {
       expect.any(Object),
     )
     expect(screen.getByRole('button', { name: /square/i })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('filters the preset library by category and search', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(<App previewTransport={transport} save={save} />)
+
+    const categoryGroup = screen.getByRole('group', { name: /preset categories/i })
+    await user.click(within(categoryGroup).getByRole('button', { name: 'Rewards' }))
+
+    expect(screen.getByRole('button', { name: /coin blink/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /click snap/i })).not.toBeInTheDocument()
+
+    await user.type(screen.getByRole('searchbox', { name: /search presets/i }), 'badge')
+
+    expect(screen.getByRole('button', { name: /badge shine/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /coin blink/i })).not.toBeInTheDocument()
   })
 
   it('updates the page theme when dark mode is selected', async () => {
