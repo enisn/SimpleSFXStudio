@@ -1,15 +1,46 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import { formatFrequency, formatMilliseconds, formatWaveformLabel, toWaveformPath } from './audio/display'
-import { downloadSound, previewSound } from './audio/runtime'
+import {
+  formatFrequency,
+  formatMilliseconds,
+  formatWaveformLabel,
+  toWaveformPath,
+} from './audio/display'
+import {
+  browserPreviewTransport,
+  downloadSound,
+  type PreviewTransport,
+} from './audio/runtime'
 import { PRESETS, varySoundParams } from './audio/presets'
 import { renderSound } from './audio/synthesis'
 import { SOUND_LIMITS, type SoundParams, type Waveform } from './audio/types'
+import {
+  THEME_MODES,
+  THEME_STORAGE_KEY,
+  applyThemeMode,
+  getStoredThemeMode,
+  getThemeMediaQuery,
+  type ThemeMode,
+} from './theme'
 
 const waveformOptions: Waveform[] = ['sine', 'triangle', 'square', 'sawtooth']
+const releasePreviewKeys = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+])
+const livePreviewDelayMs = 180
+const initialPreset = PRESETS[0]
+
+type NumericParamKey = Exclude<keyof SoundParams, 'waveform'>
 
 type NumericControl = {
-  key: Exclude<keyof SoundParams, 'waveform'>
+  key: NumericParamKey
   label: string
   format: (value: number) => string
 }
@@ -28,17 +59,21 @@ const numericControls: NumericControl[] = [
   { key: 'transient', label: 'Transient', format: (value) => `${Math.round(value * 100)}%` },
 ]
 
-const initialPreset = PRESETS[0]
-
 export type AppProps = {
-  preview?: (params: SoundParams) => Promise<void> | void
+  previewTransport?: PreviewTransport
   save?: (params: SoundParams, presetName: string) => void
 }
 
-function App({ preview = previewSound, save = downloadSound }: AppProps) {
+function App({ previewTransport = browserPreviewTransport, save = downloadSound }: AppProps) {
   const [selectedPresetId, setSelectedPresetId] = useState(initialPreset.id)
   const [params, setParams] = useState<SoundParams>({ ...initialPreset.params })
-  const [status, setStatus] = useState('Ready to sketch a tiny UI sound.')
+  const [status, setStatus] = useState('Pick a preset, then release sliders to hear each tweak.')
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [livePreview, setLivePreview] = useState(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredThemeMode)
+  const previewTimerRef = useRef<number | null>(null)
+  const playbackTokenRef = useRef(0)
+  const paramsRef = useRef(params)
 
   const selectedPreset = PRESETS.find((preset) => preset.id === selectedPresetId) ?? initialPreset
 
@@ -47,8 +82,152 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
     return toWaveformPath(samples, 720, 180)
   }, [params])
 
-  function updateParam<K extends keyof SoundParams>(key: K, value: SoundParams[K]) {
-    setParams((current) => ({ ...current, [key]: value }))
+  useEffect(() => {
+    paramsRef.current = params
+  }, [params])
+
+  useEffect(() => {
+    const mediaQuery = getThemeMediaQuery()
+    const syncTheme = () => {
+      applyThemeMode(themeMode, mediaQuery)
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode)
+    }
+
+    syncTheme()
+
+    if (themeMode !== 'system' || !mediaQuery) {
+      return
+    }
+
+    const handleThemeChange = () => {
+      applyThemeMode(themeMode, mediaQuery)
+    }
+
+    mediaQuery.addEventListener('change', handleThemeChange)
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleThemeChange)
+    }
+  }, [themeMode])
+
+  useEffect(() => {
+    return () => {
+      if (previewTimerRef.current !== null) {
+        window.clearTimeout(previewTimerRef.current)
+      }
+
+      previewTransport.stop()
+    }
+  }, [previewTransport])
+
+  const clearScheduledPreview = useCallback(() => {
+    if (previewTimerRef.current === null) {
+      return
+    }
+
+    window.clearTimeout(previewTimerRef.current)
+    previewTimerRef.current = null
+  }, [])
+
+  const playParams = useCallback(async (nextParams: SoundParams, presetName: string) => {
+    clearScheduledPreview()
+    const playbackToken = ++playbackTokenRef.current
+
+    setIsPlaying(true)
+    setStatus(`Playing ${presetName}.`)
+
+    try {
+      await previewTransport.play(nextParams, {
+        onEnded: () => {
+          if (playbackTokenRef.current !== playbackToken) {
+            return
+          }
+
+          setIsPlaying(false)
+          setStatus(`Ready to replay ${presetName}.`)
+        },
+      })
+    } catch {
+      if (playbackTokenRef.current !== playbackToken) {
+        return
+      }
+
+      setIsPlaying(false)
+      setStatus('Audio preview is unavailable in this browser.')
+    }
+  }, [clearScheduledPreview, previewTransport])
+
+  const stopPlayback = useCallback((message: string) => {
+    clearScheduledPreview()
+    playbackTokenRef.current += 1
+    previewTransport.stop()
+    setIsPlaying(false)
+    setStatus(message)
+  }, [clearScheduledPreview, previewTransport])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') {
+        return
+      }
+
+      const target = event.target
+
+      if (
+        target instanceof HTMLElement &&
+        ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(target.tagName)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (isPlaying) {
+        stopPlayback(`Stopped ${selectedPreset.name}.`)
+        return
+      }
+
+      void playParams(paramsRef.current, selectedPreset.name)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isPlaying, playParams, selectedPreset.name, stopPlayback])
+
+  function commitParams(nextParams: SoundParams) {
+    paramsRef.current = nextParams
+    setParams(nextParams)
+  }
+
+  function scheduleLivePreview(nextParams: SoundParams, presetName = selectedPreset.name) {
+    clearScheduledPreview()
+    previewTimerRef.current = window.setTimeout(() => {
+      previewTimerRef.current = null
+      void playParams(nextParams, presetName)
+    }, livePreviewDelayMs)
+  }
+
+  function updateNumericParam(key: NumericParamKey, value: number) {
+    const nextParams = { ...paramsRef.current, [key]: value } as SoundParams
+    commitParams(nextParams)
+
+    if (livePreview) {
+      scheduleLivePreview(nextParams)
+    }
+  }
+
+  function handleRangeCommit() {
+    clearScheduledPreview()
+    void playParams(paramsRef.current, selectedPreset.name)
+  }
+
+  function handleWaveformChange(waveform: Waveform) {
+    const nextParams = { ...paramsRef.current, waveform }
+    commitParams(nextParams)
+    void playParams(nextParams, selectedPreset.name)
   }
 
   function handlePresetSelect(presetId: string) {
@@ -59,49 +238,84 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
     }
 
     setSelectedPresetId(preset.id)
-    setParams({ ...preset.params })
-    setStatus(`Loaded ${preset.name}.`)
+    const nextParams = { ...preset.params }
+    commitParams(nextParams)
+    void playParams(nextParams, preset.name)
   }
 
   function handleRandomize() {
-    setParams((current) => varySoundParams(current))
-    setStatus(`Shook ${selectedPreset.name} into a fresh variation.`)
+    const nextParams = varySoundParams(paramsRef.current)
+    commitParams(nextParams)
+
+    if (livePreview || isPlaying) {
+      void playParams(nextParams, selectedPreset.name)
+      return
+    }
+
+    setStatus(`Randomized ${selectedPreset.name}. Release a slider or press Play to hear it.`)
   }
 
   function handleReset() {
-    setParams({ ...selectedPreset.params })
-    setStatus(`Reset ${selectedPreset.name} back to its base shape.`)
+    const nextParams = { ...selectedPreset.params }
+    commitParams(nextParams)
+
+    if (livePreview || isPlaying) {
+      void playParams(nextParams, selectedPreset.name)
+      return
+    }
+
+    setStatus(`Reset ${selectedPreset.name}. Press Play when you want a clean replay.`)
   }
 
-  async function handlePreview() {
-    try {
-      await preview(params)
-      setStatus(`Played ${selectedPreset.name}.`)
-    } catch {
-      setStatus('Audio preview is unavailable in this browser.')
+  function handleTransportToggle() {
+    if (isPlaying) {
+      stopPlayback(`Stopped ${selectedPreset.name}.`)
+      return
     }
+
+    void playParams(paramsRef.current, selectedPreset.name)
   }
 
   function handleExport() {
-    save(params, selectedPreset.name)
+    save(paramsRef.current, selectedPreset.name)
     setStatus(`Downloaded ${selectedPreset.name} as a WAV file.`)
   }
 
   return (
     <main className="studio-shell">
       <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Tiny UI SFX Studio</p>
-          <h1>Design quick clicks, pops, and alerts in under a second.</h1>
-          <p className="hero-text">
-            Soundmaker generates short interface sounds right in the browser with a procedural
-            synth engine, instant preview, and one-click WAV export.
-          </p>
+        <div className="hero-topbar">
+          <div className="hero-copy">
+            <p className="eyebrow">Tiny UI SFX Studio</p>
+            <h1>Sketch quick clicks, pops, and alerts without hunting for the Play button.</h1>
+            <p className="hero-text">
+              Presets preview on selection, sliders replay on release, and a sticky transport keeps
+              playback within reach while you shape the sound.
+            </p>
+          </div>
+
+          <div className="theme-switcher" aria-label="Theme preference">
+            <span className="theme-label">Theme</span>
+            <div className="theme-buttons" role="group" aria-label="Theme mode">
+              {THEME_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`theme-button ${themeMode === mode ? 'is-active' : ''}`}
+                  aria-pressed={themeMode === mode}
+                  onClick={() => setThemeMode(mode)}
+                >
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
         <div className="hero-badges" aria-label="Studio highlights">
-          <span>50 ms taps</span>
-          <span>Preset library</span>
-          <span>Wave preview</span>
+          <span>Preset auto-play</span>
+          <span>Sticky transport</span>
+          <span>Release-to-preview</span>
           <span>WAV export</span>
         </div>
       </section>
@@ -113,7 +327,7 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
               <p className="panel-kicker">Palette</p>
               <h2 id="preset-library-title">Preset library</h2>
             </div>
-            <p className="panel-note">Start from a useful UI sound and tune it fast.</p>
+            <p className="panel-note">Pick a preset and it plays immediately so you can audition fast.</p>
           </div>
 
           <div className="preset-grid">
@@ -139,22 +353,34 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
               <p>{selectedPreset.description}</p>
             </div>
 
-            <svg
-              className="wave-graphic"
-              viewBox="0 0 720 180"
-              role="img"
-              aria-label="Waveform preview"
+            <button
+              type="button"
+              className="wave-button"
+              data-state={isPlaying ? 'playing' : 'idle'}
+              onClick={handleTransportToggle}
+              aria-label={isPlaying ? 'Stop current sound' : 'Play current sound'}
             >
-              <defs>
-                <linearGradient id="waveStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#0f766e" />
-                  <stop offset="52%" stopColor="#1d4ed8" />
-                  <stop offset="100%" stopColor="#d97706" />
-                </linearGradient>
-              </defs>
-              <path className="wave-line wave-line--ghost" d="M0 90 L720 90" />
-              <path className="wave-line" d={waveformPath} />
-            </svg>
+              <svg
+                className="wave-graphic"
+                viewBox="0 0 720 180"
+                role="img"
+                aria-label="Waveform preview"
+              >
+                <defs>
+                  <linearGradient id="waveStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#0f766e" />
+                    <stop offset="52%" stopColor="#38bdf8" />
+                    <stop offset="100%" stopColor="#d97706" />
+                  </linearGradient>
+                </defs>
+                <path className="wave-line wave-line--ghost" d="M0 90 L720 90" />
+                <path className="wave-line" d={waveformPath} />
+              </svg>
+
+              <span className="wave-button-label">
+                {isPlaying ? 'Stop playback' : 'Tap waveform to play'}
+              </span>
+            </button>
 
             <div className="fact-row" aria-label="Selected sound facts">
               <div>
@@ -175,8 +401,8 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
           </div>
 
           <div className="tip-strip">
-            <strong>Shortcut:</strong> keep clicks under 90 ms, hover sounds under 140 ms, and
-            success or error feedback around 220-320 ms.
+            <strong>Shortcut:</strong> use <kbd>Space</kbd> to play or stop, keep taps under 90 ms,
+            and let success or error sounds breathe around 220-320 ms.
           </div>
         </section>
 
@@ -186,24 +412,26 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
               <p className="panel-kicker">Shape</p>
               <h2 id="shape-title">Tune the sound</h2>
             </div>
-            <p className="panel-note">Every control updates the preview in real time.</p>
+            <p className="panel-note">
+              Release a slider to hear the latest tweak, or turn on Live preview for continuous edits.
+            </p>
           </div>
 
           <div className="select-wrap">
-            <label className="select-label" htmlFor="waveform-select">
-              Waveform
-            </label>
-            <select
-              id="waveform-select"
-              value={params.waveform}
-              onChange={(event) => updateParam('waveform', event.currentTarget.value as Waveform)}
-            >
+            <div className="select-label">Waveform</div>
+            <div className="waveform-grid" role="group" aria-label="Waveform options">
               {waveformOptions.map((waveform) => (
-                <option key={waveform} value={waveform}>
+                <button
+                  key={waveform}
+                  type="button"
+                  className={`waveform-chip ${params.waveform === waveform ? 'is-active' : ''}`}
+                  aria-pressed={params.waveform === waveform}
+                  onClick={() => handleWaveformChange(waveform)}
+                >
                   {formatWaveformLabel(waveform)}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           <div className="control-grid">
@@ -223,27 +451,25 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
                     max={limits.max}
                     step={limits.step}
                     value={value}
-                    onChange={(event) =>
-                      updateParam(control.key, Number(event.currentTarget.value) as SoundParams[typeof control.key])
-                    }
+                    onChange={(event) => updateNumericParam(control.key, Number(event.currentTarget.value))}
+                    onPointerUp={handleRangeCommit}
+                    onKeyUp={(event) => {
+                      if (releasePreviewKeys.has(event.key)) {
+                        handleRangeCommit()
+                      }
+                    }}
                   />
                 </label>
               )
             })}
           </div>
 
-          <div className="action-row">
-            <button type="button" className="action-button action-button--solid" onClick={handlePreview}>
-              Preview sound
-            </button>
+          <div className="utility-row">
             <button type="button" className="action-button" onClick={handleRandomize}>
               Randomize
             </button>
             <button type="button" className="action-button" onClick={handleReset}>
               Reset to preset
-            </button>
-            <button type="button" className="action-button action-button--accent" onClick={handleExport}>
-              Export WAV
             </button>
           </div>
 
@@ -252,6 +478,44 @@ function App({ preview = previewSound, save = downloadSound }: AppProps) {
           </p>
         </section>
       </div>
+
+      <section className="transport-bar" aria-label="Playback transport">
+        <div className="transport-copy">
+          <p className="panel-kicker">Transport</p>
+          <div className="transport-title-row">
+            <h2>{selectedPreset.name}</h2>
+            <span className={`transport-state ${isPlaying ? 'is-playing' : ''}`}>
+              {isPlaying ? 'Playing' : 'Ready'}
+            </span>
+          </div>
+          <p className="transport-note">
+            {formatMilliseconds(params.durationMs)} • {formatWaveformLabel(params.waveform)} •
+            preset select auto-plays • sliders preview on release
+          </p>
+        </div>
+
+        <div className="transport-actions">
+          <button
+            type="button"
+            className="transport-play"
+            onClick={handleTransportToggle}
+          >
+            {isPlaying ? 'Stop sound' : 'Play sound'}
+          </button>
+          <button
+            type="button"
+            className={`toggle-pill ${livePreview ? 'is-active' : ''}`}
+            aria-pressed={livePreview}
+            onClick={() => setLivePreview((current) => !current)}
+          >
+            <span className="toggle-dot" aria-hidden="true"></span>
+            Live preview
+          </button>
+          <button type="button" className="action-button action-button--accent" onClick={handleExport}>
+            Export WAV
+          </button>
+        </div>
+      </section>
     </main>
   )
 }
