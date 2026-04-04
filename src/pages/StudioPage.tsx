@@ -128,6 +128,9 @@ const INSPECTOR_TAB_ITEMS: Array<{ id: InspectorTab; label: string; railLabel: s
   { id: 'master', label: 'Master', railLabel: 'Master' },
 ]
 
+const LAYER_INSPECTOR_TAB_ITEMS = INSPECTOR_TAB_ITEMS.filter((tab) => tab.id !== 'master')
+const MASTER_INSPECTOR_TAB_ITEMS = INSPECTOR_TAB_ITEMS.filter((tab) => tab.id === 'master')
+
 const layerControlConfigs: Array<SliderConfig<LayerNumericKey>> = [
   {
     key: 'gain',
@@ -547,6 +550,12 @@ function StudioPage({
     ? selectedLayerId
     : (patch.layers[0]?.id ?? 'layer-1')
   const selectedLayer = patch.layers.find((layer) => layer.id === activeLayerId) ?? patch.layers[0]
+  const isMasterInspectorTab = inspectorTab === 'master'
+  const inspectorHeaderTitle = isMasterInspectorTab ? 'Patch output' : 'Layer inspector'
+  const inspectorHeaderCopy = isMasterInspectorTab
+    ? 'Master controls shape the final mix after all layers are combined.'
+    : `Selected layer: ${selectedLayer?.name ?? 'None'}. Layer, Envelope, and Filter apply only to this layer.`
+  const inspectorScopeLabel = isMasterInspectorTab ? 'Patch scope' : 'Layer scope'
   const availableSources = useMemo(
     () => [
       ...STUDIO_PATCHES.map((preset) => ({
@@ -1666,15 +1675,21 @@ function StudioPage({
             <div className="studio-pane__header">
               <div>
                 <p className="studio-panel-kicker">Inspector</p>
-                <h2>{selectedLayer?.name ?? patch.name}</h2>
+                <h2>{inspectorHeaderTitle}</h2>
+                <p className="studio-panel-copy">{inspectorHeaderCopy}</p>
               </div>
-              <div className="studio-reorder-actions">
-                <button type="button" onClick={() => handleMoveLayer(-1)}>
-                  Up
-                </button>
-                <button type="button" onClick={() => handleMoveLayer(1)}>
-                  Down
-                </button>
+              <div className="studio-panel-head__actions">
+                <span className="studio-pane__scope">{inspectorScopeLabel}</span>
+                {!isMasterInspectorTab && selectedLayer ? (
+                  <div className="studio-reorder-actions">
+                    <button type="button" onClick={() => handleMoveLayer(-1)}>
+                      Up
+                    </button>
+                    <button type="button" onClick={() => handleMoveLayer(1)}>
+                      Down
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1817,7 +1832,7 @@ function StudioPage({
                 <div className="studio-panel-head">
                   <div>
                     <p className="studio-panel-kicker">Master</p>
-                    <h2>Patch bus</h2>
+                    <h2>Final mix</h2>
                   </div>
                 </div>
 
@@ -1863,43 +1878,101 @@ function StudioPage({
             </div>
           </div>
 
-          <div className="studio-pane-rail studio-pane-rail--right">
+          <div
+            className="studio-pane-rail studio-pane-rail--right"
+            onClick={(event) => {
+              if (!(event.target instanceof HTMLElement)) {
+                return
+              }
+
+              if (event.target.closest('.studio-pane-rail-tab, .studio-pane-rail__toggle')) {
+                return
+              }
+
+              setIsRightPanelOpen((current) => !current)
+            }}
+          >
             <button
               type="button"
-              className="studio-pane-rail__toggle"
-              aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector`}
+              className="studio-pane-rail__toggle studio-pane-rail__toggle--icon"
+              aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector panel`}
               aria-controls="studio-right-pane-content"
               aria-expanded={isRightPanelOpen}
-              onClick={() => setIsRightPanelOpen((current) => !current)}
+              title={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector panel`}
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsRightPanelOpen((current) => !current)
+              }}
             >
-              <span className="studio-pane-rail__icon">
+              <span className="studio-pane-rail__icon studio-pane-rail__icon--inspector">
                 <InspectorRailIcon />
               </span>
+            </button>
+
+            <div className="studio-pane-rail__tabs studio-pane-rail__tabs--inspector" role="tablist" aria-label="Inspector sections">
+              <div className="studio-pane-rail__group">
+                {LAYER_INSPECTOR_TAB_ITEMS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
+                    aria-controls="studio-right-pane-content"
+                    aria-label={`${tab.label} inspector`}
+                    aria-selected={inspectorTab === tab.id}
+                    title={tab.label}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setInspectorTab(tab.id)
+                      setIsRightPanelOpen(true)
+                    }}
+                  >
+                    {tab.railLabel}
+                  </button>
+                ))}
+              </div>
+
+              <span className="studio-pane-rail__divider" aria-hidden="true" />
+
+              <div className="studio-pane-rail__group">
+                {MASTER_INSPECTOR_TAB_ITEMS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
+                    aria-controls="studio-right-pane-content"
+                    aria-label={`${tab.label} inspector`}
+                    aria-selected={inspectorTab === tab.id}
+                    title={tab.label}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setInspectorTab(tab.id)
+                      setIsRightPanelOpen(true)
+                    }}
+                  >
+                    {tab.railLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="studio-pane-rail__toggle studio-pane-rail__toggle--edge"
+              aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector handle`}
+              aria-controls="studio-right-pane-content"
+              aria-expanded={isRightPanelOpen}
+              title={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector handle`}
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsRightPanelOpen((current) => !current)
+              }}
+            >
               <span className="studio-pane-rail__chevron">
                 <ChevronIcon direction={isRightPanelOpen ? 'right' : 'left'} />
               </span>
             </button>
-
-            <div className="studio-pane-rail__tabs" role="tablist" aria-label="Inspector sections">
-              {INSPECTOR_TAB_ITEMS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
-                  aria-controls="studio-right-pane-content"
-                  aria-label={`${tab.label} inspector`}
-                  aria-selected={inspectorTab === tab.id}
-                  title={tab.label}
-                  onClick={() => {
-                    setInspectorTab(tab.id)
-                    setIsRightPanelOpen(true)
-                  }}
-                >
-                  {tab.railLabel}
-                </button>
-              ))}
-            </div>
           </div>
         </aside>
       </section>

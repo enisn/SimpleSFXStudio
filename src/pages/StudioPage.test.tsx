@@ -260,7 +260,7 @@ describe('StudioPage', () => {
     const save = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={['/studio']}>
         <Routes>
           <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
@@ -276,19 +276,57 @@ describe('StudioPage', () => {
       'false',
     )
 
-    await user.click(screen.getByRole('button', { name: /collapse inspector/i }))
+    const rightRail = container.querySelector('.studio-pane-rail--right')
+
+    expect(rightRail).not.toBeNull()
+
+    if (!rightRail) {
+      throw new Error('Right inspector rail is missing.')
+    }
+
+    fireEvent.click(rightRail)
 
     expect(screen.queryByRole('heading', { name: /body/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /expand inspector/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^expand inspector panel$/i })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
 
     await user.click(screen.getByRole('button', { name: /expand source browser/i }))
+    fireEvent.click(container.querySelector('.studio-pane-rail--right') as HTMLElement)
     await user.click(screen.getByRole('tab', { name: /master inspector/i }))
 
     expect(screen.getByRole('heading', { name: /patch browser/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /patch bus/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /patch output/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /final mix/i })).toBeInTheDocument()
+  })
+
+  it('clarifies whether the inspector is editing a layer or the patch output', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('heading', { name: /layer inspector/i })).toBeInTheDocument()
+    expect(screen.getByText(/layer, envelope, and filter apply only to this layer\./i)).toBeInTheDocument()
+    expect(screen.getByText(/layer scope/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^up$/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /master inspector/i }))
+
+    expect(screen.getByRole('heading', { name: /patch output/i })).toBeInTheDocument()
+    expect(
+      screen.getByText(/master controls shape the final mix after all layers are combined\./i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/patch scope/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^up$/i })).not.toBeInTheDocument()
   })
 
   it('warns before loading a browser preset when the patch was modified', async () => {

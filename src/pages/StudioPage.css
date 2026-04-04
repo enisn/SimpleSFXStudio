@@ -374,6 +374,9 @@
 }
 
 .studio-pane-rail--right {
+  cursor: pointer;
+  justify-content: flex-start;
+  padding-bottom: 0;
   border-left: 1px solid var(--surface-border);
   border-radius: 0 22px 22px 0;
 }
@@ -396,6 +399,23 @@
   background: transparent;
 }
 
+.studio-pane-rail__toggle--edge {
+  min-height: 58px;
+  justify-content: center;
+  gap: 0;
+  margin-top: auto;
+  padding: 16px 0;
+  border-top: 1px solid var(--surface-border);
+  border-radius: 0;
+}
+
+.studio-pane-rail__toggle--icon {
+  min-height: 56px;
+  justify-content: center;
+  gap: 0;
+  padding: 14px 0 8px;
+}
+
 .studio-pane-rail__tabs {
   flex: 1;
   display: flex;
@@ -404,6 +424,24 @@
   justify-content: center;
   gap: 10px;
   padding: 10px 0;
+}
+
+.studio-pane-rail__tabs--inspector {
+  gap: 14px;
+  padding: 16px 0 12px;
+}
+
+.studio-pane-rail__group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-pane-rail__divider {
+  width: 20px;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.3);
 }
 
 .studio-pane-rail-tab {
@@ -428,6 +466,11 @@
   width: 20px;
   height: 20px;
   display: inline-flex;
+}
+
+.studio-pane-rail__icon--inspector {
+  margin-top: 2px;
+  color: var(--ink);
 }
 
 .studio-pane-rail svg {
@@ -607,6 +650,19 @@
 .studio-panel-head__actions .studio-panel-copy {
   margin-top: 0;
   max-width: 40ch;
+}
+
+.studio-pane__scope {
+  display: inline-flex;
+  align-self: flex-end;
+  padding: 6px 10px;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-strong);
 }
 
 .studio-fact-row > div,
@@ -1050,6 +1106,7 @@
 .studio-tab:focus-visible,
 .studio-pane-rail--left:hover,
 .studio-pane-rail--left:focus-visible,
+.studio-pane-rail--right:hover,
 .studio-pane-rail__toggle:hover,
 .studio-pane-rail__toggle:focus-visible,
 .studio-pane-rail-tab:hover,
@@ -1076,6 +1133,7 @@
 
 .studio-pane-rail--left:hover,
 .studio-pane-rail--left:focus-visible,
+.studio-pane-rail--right:hover,
 .studio-pane-rail__toggle:hover,
 .studio-pane-rail__toggle:focus-visible,
 .studio-pane-rail-tab:hover,
