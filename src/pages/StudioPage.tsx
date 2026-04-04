@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -354,6 +355,15 @@ function constrainLayerToPatchDuration(layer: StudioLayer, patchDurationMs: numb
   }
 }
 
+function normalizePatchTimelineBounds(patch: StudioPatch) {
+  const clampedPatch = clampStudioPatch(patch)
+
+  return {
+    ...clampedPatch,
+    layers: clampedPatch.layers.map((layer) => constrainLayerToPatchDuration(layer, clampedPatch.durationMs)),
+  }
+}
+
 function getTimelineClipStyle(layer: StudioLayer, patchDurationMs: number): CSSProperties {
   const safePatchDurationMs = Math.max(patchDurationMs, 1)
   const clipStartMs = Math.min(Math.max(layer.startMs, 0), safePatchDurationMs)
@@ -384,7 +394,7 @@ function getStoredStudioPatch() {
   }
 
   try {
-    return clampStudioPatch(JSON.parse(stored) as StudioPatch)
+    return normalizePatchTimelineBounds(JSON.parse(stored) as StudioPatch)
   } catch {
     return null
   }
@@ -438,13 +448,16 @@ function StudioPage({
   const importedPreset = getSimplePresetById(searchParams.get('preset'))
   const initialPatch = useMemo(
     () =>
-      importedPreset
-        ? simplePresetToStudioPatch(importedPreset)
-        : getStoredStudioPatch() ?? cloneStudioPatch(STUDIO_PATCHES[0]),
+      normalizePatchTimelineBounds(
+        importedPreset
+          ? simplePresetToStudioPatch(importedPreset)
+          : getStoredStudioPatch() ?? cloneStudioPatch(STUDIO_PATCHES[0]),
+      ),
     [importedPreset],
   )
   const initialLayout = useMemo(() => getStoredStudioLayout(), [])
   const [patch, setPatch] = useState<StudioPatch>(initialPatch)
+  const deferredPatch = useDeferredValue(patch)
   const [selectedLibraryId, setSelectedLibraryId] = useState<string>(initialPatch.id)
   const [selectedLayerId, setSelectedLayerId] = useState<string>(initialPatch.layers[0]?.id ?? 'layer-1')
   const [status, setStatus] = useState(
@@ -493,9 +506,9 @@ function StudioPage({
     [],
   )
   const waveformPath = useMemo(() => {
-    const render = renderStudioPatch(patch, { sampleRate: 6000, seed: 17 })
+    const render = renderStudioPatch(deferredPatch, { sampleRate: 6000, seed: 17 })
     return toWaveformPath(mixStereoForDisplay(render), 960, 300)
-  }, [patch])
+  }, [deferredPatch])
   const timelineMarkers = useMemo(
     () =>
       Array.from({ length: TIMELINE_MARKER_DIVISIONS + 1 }, (_, index) => {
@@ -512,13 +525,14 @@ function StudioPage({
   const layerWaveformPaths = useMemo(
     () =>
       Object.fromEntries(
-        patch.layers.map((layer) => {
+        deferredPatch.layers.map((layer) => {
           const render = renderStudioPatch(
             {
-              ...patch,
-              layers: [{ ...layer, enabled: true, solo: false }],
+              ...deferredPatch,
+              durationMs: layer.durationMs,
+              layers: [{ ...layer, startMs: 0, enabled: true, solo: false }],
               master: {
-                ...patch.master,
+                ...deferredPatch.master,
                 gain: 1,
                 drive: 0,
                 delayMix: 0,
@@ -535,7 +549,7 @@ function StudioPage({
           ]
         }),
       ) as Record<string, string>,
-    [patch],
+    [deferredPatch],
   )
   const workspaceStyle = useMemo<WorkspaceStyle>(
     () => ({
@@ -731,7 +745,7 @@ function StudioPage({
         }
 
         dragState.didChange = true
-        const nextPatch = clampStudioPatch({
+        const nextPatch = normalizePatchTimelineBounds({
           ...currentPatch,
           layers: currentPatch.layers.map((layer) =>
             layer.id === dragState.layerId ? { ...layer, startMs: nextStartMs } : layer,
@@ -756,7 +770,7 @@ function StudioPage({
       }
 
       dragState.didChange = true
-      const nextPatch = clampStudioPatch({
+      const nextPatch = normalizePatchTimelineBounds({
         ...currentPatch,
         layers: currentPatch.layers.map((layer) =>
           layer.id === dragState.layerId ? { ...layer, durationMs: nextDurationMs } : layer,
@@ -766,7 +780,7 @@ function StudioPage({
       setPatch(nextPatch)
     }
 
-    const handlePointerUp = () => {
+    const finishTimelineDrag = (previewOnCommit: boolean) => {
       const dragState = timelineDragStateRef.current
 
       if (!dragState) {
@@ -776,17 +790,33 @@ function StudioPage({
       timelineDragStateRef.current = null
       delete document.body.dataset.timelineDrag
 
-      if (dragState.didChange) {
+      if (previewOnCommit && dragState.didChange) {
         void playPatch(patchRef.current, `Previewing ${patchRef.current.name}.`)
       }
     }
 
+    const handlePointerUp = () => {
+      finishTimelineDrag(true)
+    }
+
+    const handlePointerCancel = () => {
+      finishTimelineDrag(false)
+    }
+
+    const handleWindowBlur = () => {
+      finishTimelineDrag(false)
+    }
+
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
+    window.addEventListener('blur', handleWindowBlur)
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('blur', handleWindowBlur)
     }
   }, [playPatch])
 
@@ -841,7 +871,7 @@ function StudioPage({
   )
 
   function commitPatch(nextPatch: StudioPatch, options: { preview?: boolean; status?: string } = {}) {
-    const normalizedPatch = clampStudioPatch(nextPatch)
+    const normalizedPatch = normalizePatchTimelineBounds(nextPatch)
     patchRef.current = normalizedPatch
     setPatch(normalizedPatch)
 
@@ -1332,6 +1362,7 @@ function StudioPage({
               <div>
                 <p className="studio-panel-kicker">Mix</p>
                 <h2>Final waveform</h2>
+                <p className="studio-panel-copy">{patch.description}</p>
               </div>
               <span>{isPlaying ? 'Playing' : 'Ready'}</span>
             </div>
