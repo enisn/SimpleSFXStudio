@@ -88,10 +88,9 @@ describe('StudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add layer/i }))
 
-    const layerCards = screen.getAllByRole('button', { name: /delete/i })
-    await user.click(layerCards[layerCards.length - 1]!)
+    await user.click(screen.getByRole('button', { name: /layer 3/i }))
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
 
-    expect(screen.queryAllByText(/layer 3/i)).toHaveLength(0)
     expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)
     expect(within(screen.getByLabelText(/patch layers/i)).queryAllByText(/layer 3/i)).toHaveLength(0)
   })

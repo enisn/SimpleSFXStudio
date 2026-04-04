@@ -102,6 +102,13 @@
   flex-wrap: wrap;
 }
 
+.studio-layer-card__actions {
+  align-items: center;
+  align-content: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
 .studio-topbar__actions {
   justify-content: flex-end;
 }
@@ -126,6 +133,7 @@
 .studio-toggle,
 .studio-theme-button,
 .studio-tab,
+.studio-layer-card,
 .studio-source-card,
 .studio-layer-main,
 .studio-layer-card__actions button,
@@ -170,7 +178,7 @@
 .studio-tab.is-active,
 .studio-chip.is-active,
 .studio-source-card.is-active,
-.studio-layer-card.is-active .studio-layer-main {
+.studio-layer-card.is-active {
   color: var(--accent-contrast);
   border-color: transparent;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
@@ -372,9 +380,36 @@
   border-radius: 18px;
 }
 
+.studio-layer-card.is-active .studio-layer-main {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--accent-contrast);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.studio-layer-card.is-active .studio-layer-main span {
+  color: rgba(245, 252, 250, 0.78);
+}
+
+.studio-layer-card.is-active .studio-layer-card__actions button {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--accent-contrast);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .studio-layer-card__actions button,
 .studio-reorder-actions button {
   padding: 8px 10px;
+}
+
+.studio-layer-card__actions button {
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  align-self: flex-start;
 }
 
 .studio-layer-actions {

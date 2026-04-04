@@ -1045,9 +1045,6 @@ function StudioPage({
                           <button type="button" onClick={() => toggleLayerSolo(layer.id)}>
                             {layer.solo ? 'Soloed' : 'Solo'}
                           </button>
-                          <button type="button" onClick={() => handleRemoveLayer(layer.id)}>
-                            Delete
-                          </button>
                           <button
                             type="button"
                             onClick={() => {
