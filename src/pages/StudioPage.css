@@ -13,6 +13,7 @@
 .studio-statusbar,
 .studio-hero-card,
 .studio-wave-card,
+.studio-timeline-card,
 .studio-summary-card,
 .studio-section-card {
   position: relative;
@@ -28,6 +29,7 @@
 .studio-statusbar::after,
 .studio-hero-card::after,
 .studio-wave-card::after,
+.studio-timeline-card::after,
 .studio-summary-card::after,
 .studio-section-card::after {
   content: '';
@@ -53,7 +55,12 @@
 .studio-fact-row,
 .studio-statusbar__meta,
 .studio-option-group,
-.studio-reorder-actions {
+.studio-reorder-actions,
+.studio-timeline-card,
+.studio-timeline-ruler,
+.studio-timeline-track,
+.studio-timeline-track-head,
+.studio-timeline-track-clip {
   position: relative;
   z-index: 1;
 }
@@ -78,7 +85,9 @@
 .studio-option-group,
 .studio-layer-actions,
 .studio-layer-card__actions,
-.studio-reorder-actions {
+.studio-reorder-actions,
+.studio-timeline-track-head__actions,
+.studio-timeline-track-clip__meta {
   display: flex;
   gap: 10px;
 }
@@ -98,7 +107,9 @@
 .studio-wave-meta,
 .studio-option-group,
 .studio-layer-actions,
-.studio-layer-card__actions {
+.studio-layer-card__actions,
+.studio-timeline-track-head__actions,
+.studio-timeline-track-clip__meta {
   flex-wrap: wrap;
 }
 
@@ -122,6 +133,7 @@
 .studio-layer-main,
 .studio-layer-card__actions button,
 .studio-reorder-actions button,
+.studio-timeline-track-head__actions button,
 .studio-chip,
 .studio-name-input,
 .studio-input-wrap input {
@@ -138,6 +150,8 @@
 .studio-layer-main,
 .studio-layer-card__actions button,
 .studio-reorder-actions button,
+.studio-timeline-track-clip,
+.studio-timeline-track-head__actions button,
 .studio-chip {
   transition:
     transform 180ms ease,
@@ -154,7 +168,8 @@
 .studio-tab,
 .studio-chip,
 .studio-layer-card__actions button,
-.studio-reorder-actions button {
+.studio-reorder-actions button,
+.studio-timeline-track-head__actions button {
   padding: 10px 14px;
   border: 1px solid var(--surface-border);
   border-radius: 14px;
@@ -168,7 +183,8 @@
 .studio-tab,
 .studio-chip,
 .studio-layer-card__actions button,
-.studio-reorder-actions button {
+.studio-reorder-actions button,
+.studio-timeline-track-head__actions button {
   color: var(--muted);
 }
 
@@ -272,7 +288,7 @@
 .studio-pane--center {
   gap: 12px;
   padding: 12px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(260px, 0.92fr) minmax(0, 1.08fr);
 }
 
 .studio-pane__header,
@@ -280,6 +296,7 @@
 .studio-tab-bar,
 .studio-hero-card,
 .studio-wave-card,
+.studio-timeline-card,
 .studio-summary-card,
 .studio-section-card {
   padding: 14px;
@@ -301,6 +318,7 @@
 
 .studio-pane__header > span,
 .studio-panel-head > span,
+.studio-panel-copy,
 .studio-source-card small,
 .studio-wave-meta,
 .studio-summary-list,
@@ -357,6 +375,7 @@
 .studio-summary-card,
 .studio-hero-card,
 .studio-wave-card,
+.studio-timeline-card,
 .studio-section-card {
   border: 1px solid var(--surface-border);
   background: var(--surface);
@@ -418,9 +437,16 @@
 }
 
 .studio-hero-copy h1,
+.studio-panel-copy,
 .studio-hero-copy p,
 .studio-statusbar p {
   margin: 0;
+}
+
+.studio-panel-copy {
+  margin-top: 6px;
+  font-size: 0.92rem;
+  line-height: 1.4;
 }
 
 .studio-fact-row > div,
@@ -476,6 +502,250 @@
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.studio-timeline-card {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.studio-timeline-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-timeline-board {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.studio-timeline-ruler-label,
+.studio-timeline-track-head {
+  padding: 12px 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.studio-timeline-ruler-label {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.studio-timeline-ruler-label strong,
+.studio-timeline-track-select strong {
+  color: var(--ink);
+}
+
+.studio-timeline-ruler {
+  min-height: 54px;
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(7, 13, 20, 0.98), rgba(15, 23, 42, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 40%);
+}
+
+.studio-timeline-ruler__marker {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+}
+
+.studio-timeline-ruler__marker::before {
+  content: '';
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.studio-timeline-ruler__marker span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  padding-top: 8px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.studio-timeline-track-head {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+
+.studio-timeline-track-head.is-active {
+  border-color: rgba(56, 189, 248, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
+}
+
+.studio-timeline-track-select {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.studio-timeline-track-select span {
+  color: var(--muted);
+}
+
+.studio-timeline-track-head__actions {
+  gap: 6px;
+}
+
+.studio-timeline-track-head__actions button {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.studio-timeline-track-head__actions button[aria-pressed='true'] {
+  color: var(--accent-contrast);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
+.studio-timeline-track {
+  min-height: 96px;
+  border: 1px solid var(--surface-border);
+  border-radius: 20px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(7, 13, 20, 0.98), rgba(15, 23, 42, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 40%);
+}
+
+.studio-timeline-track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: calc(100% / 8) 100%;
+  pointer-events: none;
+}
+
+.studio-timeline-track.is-active {
+  border-color: rgba(56, 189, 248, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
+}
+
+.studio-timeline-track-surface {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-timeline-track-clip {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  min-width: 28px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 28px 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.34), rgba(56, 189, 248, 0.26));
+  box-shadow: 0 14px 28px rgba(3, 7, 18, 0.28);
+  cursor: grab;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.studio-timeline-track-clip.is-muted {
+  opacity: 0.58;
+  filter: saturate(0.72);
+}
+
+.studio-timeline-track-clip.is-solo {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.36), rgba(56, 189, 248, 0.22));
+}
+
+.studio-timeline-track-clip:active {
+  cursor: grabbing;
+}
+
+.studio-timeline-track-clip__wave {
+  width: 100%;
+  height: 100%;
+  min-height: 40px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.18);
+}
+
+.studio-timeline-track-clip__ghost {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.studio-timeline-track-clip__line {
+  fill: none;
+  stroke: rgba(248, 250, 252, 0.92);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.studio-timeline-track-clip__meta {
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: rgba(248, 250, 252, 0.8);
+}
+
+.studio-timeline-track-clip__meta span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.18);
+}
+
+.studio-timeline-track-clip__handle {
+  position: absolute;
+  top: 10px;
+  right: 6px;
+  bottom: 10px;
+  width: 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.16));
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.studio-timeline-track-clip__handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 24px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: rgba(2, 6, 23, 0.38);
 }
 
 .studio-summary-grid {
@@ -575,8 +845,13 @@
 .studio-layer-card__actions button:focus-visible,
 .studio-reorder-actions button:hover,
 .studio-reorder-actions button:focus-visible,
+.studio-timeline-track-select:hover,
+.studio-timeline-track-select:focus-visible,
+.studio-timeline-track-head__actions button:hover,
+.studio-timeline-track-head__actions button:focus-visible,
 .studio-chip:hover,
-.studio-chip:focus-visible {
+.studio-chip:focus-visible,
+.studio-timeline-track-clip:hover {
   transform: translateY(-1px);
   border-color: var(--surface-hover-border);
   box-shadow: var(--focus-ring);
@@ -588,9 +863,27 @@ body[data-resizing='right'] {
   user-select: none;
 }
 
+body[data-timeline-drag='move'] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body[data-timeline-drag='resize-end'] {
+  cursor: ew-resize;
+  user-select: none;
+}
+
 body[data-resizing='left'] *,
 body[data-resizing='right'] * {
   cursor: col-resize !important;
+}
+
+body[data-timeline-drag='move'] * {
+  cursor: grabbing !important;
+}
+
+body[data-timeline-drag='resize-end'] * {
+  cursor: ew-resize !important;
 }
 
 @media (max-width: 1280px) {
@@ -656,6 +949,7 @@ body[data-resizing='right'] * {
 
   .studio-pane--center {
     grid-row: 1;
+    grid-template-rows: minmax(220px, 0.92fr) minmax(0, 1.08fr);
   }
 
   .studio-pane--left {
@@ -675,6 +969,18 @@ body[data-resizing='right'] * {
   .studio-summary-grid,
   .studio-layer-actions {
     grid-template-columns: 1fr;
+  }
+
+  .studio-timeline-board {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-timeline-ruler-label {
+    display: none;
+  }
+
+  .studio-timeline-track {
+    min-height: 88px;
   }
 
   .studio-wave {
