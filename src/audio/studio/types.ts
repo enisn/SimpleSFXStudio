@@ -56,7 +56,6 @@ export interface StudioPatch {
   layers: StudioLayer[]
 }
 
-export const MAX_STUDIO_LAYERS = 4
 export const STUDIO_DRAFT_STORAGE_KEY = 'soundmaker-studio-draft'
 
 export const STUDIO_LIMITS = {
@@ -72,7 +71,7 @@ export const STUDIO_LIMITS = {
   noise: { min: 0, max: 1, step: 0.01 },
   frequency: { min: 50, max: 6400, step: 10 },
   detuneCents: { min: -2400, max: 2400, step: 10 },
-  layerStartMs: { min: 0, max: 1800, step: 5 },
+  layerStartMs: { min: 0, max: 1800, step: 1 },
   layerDurationMs: { min: 30, max: 1800, step: 5 },
   vibratoDepth: { min: 0, max: 180, step: 1 },
   vibratoRate: { min: 0, max: 24, step: 0.1 },
@@ -265,7 +264,7 @@ export function clampStudioMasterSettings(master: StudioMasterSettings): StudioM
 }
 
 export function clampStudioPatch(patch: StudioPatch): StudioPatch {
-  const layers = patch.layers.slice(0, MAX_STUDIO_LAYERS).map(clampStudioLayer)
+  const layers = patch.layers.map(clampStudioLayer)
 
   return {
     ...patch,

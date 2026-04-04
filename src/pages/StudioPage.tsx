@@ -26,7 +26,6 @@ import {
   type StudioPreviewTransport,
 } from '../audio/studio/runtime'
 import {
-  MAX_STUDIO_LAYERS,
   STUDIO_DRAFT_STORAGE_KEY,
   STUDIO_LIMITS,
   clampStudioPatch,
@@ -63,6 +62,7 @@ const releasePreviewKeys = new Set([
 const STUDIO_LAYOUT_STORAGE_KEY = 'soundmaker-studio-layout'
 const DEFAULT_LEFT_PANEL_WIDTH = 320
 const DEFAULT_RIGHT_PANEL_WIDTH = 380
+const PANEL_RAIL_WIDTH = 56
 const MIN_SIDEBAR_WIDTH = 260
 const MAX_SIDEBAR_WIDTH = 460
 const MIN_CENTER_WIDTH = 540
@@ -86,7 +86,6 @@ type LayerNumericKey =
 type EnvelopeNumericKey = keyof StudioLayer['envelope']
 type FilterNumericKey = Exclude<keyof StudioLayer['filter'], 'type'>
 type MasterNumericKey = keyof StudioMasterSettings
-type LeftSidebarTab = 'layers' | 'browser'
 type InspectorTab = 'layer' | 'envelope' | 'filter' | 'master'
 type ResizePane = 'left' | 'right'
 type TimelineDragMode = 'move' | 'resize-end'
@@ -117,8 +116,17 @@ type TimelineDragState = {
 
 type WorkspaceStyle = CSSProperties & {
   '--studio-left-width': string
+  '--studio-left-resizer-width': string
   '--studio-right-width': string
+  '--studio-right-resizer-width': string
 }
+
+const INSPECTOR_TAB_ITEMS: Array<{ id: InspectorTab; label: string; railLabel: string }> = [
+  { id: 'layer', label: 'Layer', railLabel: 'Layer' },
+  { id: 'envelope', label: 'Envelope', railLabel: 'Env' },
+  { id: 'filter', label: 'Filter', railLabel: 'Filter' },
+  { id: 'master', label: 'Master', railLabel: 'Master' },
+]
 
 const layerControlConfigs: Array<SliderConfig<LayerNumericKey>> = [
   {
@@ -412,7 +420,12 @@ function getStoredStudioLayout() {
   }
 
   try {
-    const parsed = JSON.parse(stored) as { leftPanelWidth?: number; rightPanelWidth?: number }
+    const parsed = JSON.parse(stored) as {
+      leftPanelWidth?: number
+      rightPanelWidth?: number
+      isLeftPanelOpen?: boolean
+      isRightPanelOpen?: boolean
+    }
 
     return {
       leftPanelWidth: clampPanelWidth(
@@ -425,6 +438,8 @@ function getStoredStudioLayout() {
         MIN_SIDEBAR_WIDTH,
         MAX_SIDEBAR_WIDTH,
       ),
+      isLeftPanelOpen: parsed.isLeftPanelOpen ?? true,
+      isRightPanelOpen: parsed.isRightPanelOpen ?? true,
     }
   } catch {
     return null
@@ -433,6 +448,45 @@ function getStoredStudioLayout() {
 
 function createLayerId() {
   return `layer-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function isKeyboardShortcutTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(target.tagName))
+  )
+}
+
+function BrowserRailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4.5 6.75a2.25 2.25 0 0 1 2.25-2.25h3.15l1.65 1.8h5.7a2.25 2.25 0 0 1 2.25 2.25v8.7a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 17.25v-10.5Z" />
+      <path d="M4.5 9h15" />
+    </svg>
+  )
+}
+
+function InspectorRailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M6 5.25v13.5" />
+      <path d="M12 5.25v13.5" />
+      <path d="M18 5.25v13.5" />
+      <circle cx="6" cy="9" r="2.25" />
+      <circle cx="12" cy="14.25" r="2.25" />
+      <circle cx="18" cy="8.25" r="2.25" />
+    </svg>
+  )
+}
+
+function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
+  const path = direction === 'left' ? 'M14.25 5.25 8.25 12l6 6.75' : 'm9.75 5.25 6 6.75-6 6.75'
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  )
 }
 
 export type StudioPageProps = {
@@ -446,19 +500,22 @@ function StudioPage({
 }: StudioPageProps) {
   const [searchParams] = useSearchParams()
   const importedPreset = getSimplePresetById(searchParams.get('preset'))
+  const storedDraft = useMemo(() => getStoredStudioPatch(), [])
   const initialPatch = useMemo(
     () =>
       normalizePatchTimelineBounds(
         importedPreset
           ? simplePresetToStudioPatch(importedPreset)
-          : getStoredStudioPatch() ?? cloneStudioPatch(STUDIO_PATCHES[0]),
+          : storedDraft ?? cloneStudioPatch(STUDIO_PATCHES[0]),
       ),
-    [importedPreset],
+    [importedPreset, storedDraft],
   )
   const initialLayout = useMemo(() => getStoredStudioLayout(), [])
   const [patch, setPatch] = useState<StudioPatch>(initialPatch)
   const deferredPatch = useDeferredValue(patch)
-  const [selectedLibraryId, setSelectedLibraryId] = useState<string>(initialPatch.id)
+  const [selectedLibraryId, setSelectedLibraryId] = useState<string>(
+    importedPreset ? `simple-${importedPreset.id}` : initialPatch.id,
+  )
   const [selectedLayerId, setSelectedLayerId] = useState<string>(initialPatch.layers[0]?.id ?? 'layer-1')
   const [status, setStatus] = useState(
     importedPreset
@@ -467,9 +524,11 @@ function StudioPage({
   )
   const [isPlaying, setIsPlaying] = useState(false)
   const [livePreview, setLivePreview] = useState(false)
+  const [hasPatchChanges, setHasPatchChanges] = useState(Boolean(storedDraft && !importedPreset))
   const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredThemeMode)
-  const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('layers')
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('layer')
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(initialLayout?.isLeftPanelOpen ?? true)
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(initialLayout?.isRightPanelOpen ?? true)
   const [leftPanelWidth, setLeftPanelWidth] = useState(
     initialLayout?.leftPanelWidth ?? DEFAULT_LEFT_PANEL_WIDTH,
   )
@@ -553,10 +612,12 @@ function StudioPage({
   )
   const workspaceStyle = useMemo<WorkspaceStyle>(
     () => ({
-      '--studio-left-width': `${leftPanelWidth}px`,
-      '--studio-right-width': `${rightPanelWidth}px`,
+      '--studio-left-width': `${isLeftPanelOpen ? leftPanelWidth : PANEL_RAIL_WIDTH}px`,
+      '--studio-left-resizer-width': isLeftPanelOpen ? '12px' : '0px',
+      '--studio-right-width': `${isRightPanelOpen ? rightPanelWidth : PANEL_RAIL_WIDTH}px`,
+      '--studio-right-resizer-width': isRightPanelOpen ? '12px' : '0px',
     }),
-    [leftPanelWidth, rightPanelWidth],
+    [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, rightPanelWidth],
   )
 
   useEffect(() => {
@@ -568,9 +629,9 @@ function StudioPage({
     panelWidthsRef.current = { left: leftPanelWidth, right: rightPanelWidth }
     window.localStorage.setItem(
       STUDIO_LAYOUT_STORAGE_KEY,
-      JSON.stringify({ leftPanelWidth, rightPanelWidth }),
+      JSON.stringify({ leftPanelWidth, rightPanelWidth, isLeftPanelOpen, isRightPanelOpen }),
     )
-  }, [leftPanelWidth, rightPanelWidth])
+  }, [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, rightPanelWidth])
 
   useEffect(() => {
     document.body.dataset.studio = 'true'
@@ -870,10 +931,14 @@ function StudioPage({
     [],
   )
 
-  function commitPatch(nextPatch: StudioPatch, options: { preview?: boolean; status?: string } = {}) {
+  function commitPatch(
+    nextPatch: StudioPatch,
+    options: { preview?: boolean; resetDirty?: boolean; status?: string } = {},
+  ) {
     const normalizedPatch = normalizePatchTimelineBounds(nextPatch)
     patchRef.current = normalizedPatch
     setPatch(normalizedPatch)
+    setHasPatchChanges(!options.resetDirty)
 
     if (options.status) {
       setStatus(options.status)
@@ -889,6 +954,15 @@ function StudioPage({
   }
 
   function handlePatchSourceSelect(sourceId: string, sourceType: 'studio' | 'simple') {
+    if (
+      hasPatchChanges &&
+      !window.confirm(
+        'Loading a preset will replace the current timeline. Your customizations will be lost. Continue?',
+      )
+    ) {
+      return
+    }
+
     if (sourceType === 'simple') {
       const presetId = sourceId.replace(/^simple-/, '')
       const preset = PRESETS.find((candidate) => candidate.id === presetId)
@@ -898,11 +972,10 @@ function StudioPage({
       }
 
       const nextPatch = simplePresetToStudioPatch(preset)
-      setSelectedLibraryId(nextPatch.id)
+      setSelectedLibraryId(sourceId)
       setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
-      setLeftSidebarTab('layers')
       setInspectorTab('layer')
-      commitPatch(nextPatch, { status: `Imported ${preset.name} into the studio.` })
+      commitPatch(nextPatch, { resetDirty: true, status: `Imported ${preset.name} into the studio.` })
       return
     }
 
@@ -913,10 +986,9 @@ function StudioPage({
     }
 
     const nextPatch = cloneStudioPatch(preset)
-    setSelectedLibraryId(preset.id)
+    setSelectedLibraryId(sourceId)
     setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
-    setLeftSidebarTab('layers')
-    commitPatch(nextPatch, { status: `Loaded ${preset.name}.` })
+    commitPatch(nextPatch, { resetDirty: true, status: `Loaded ${preset.name}.` })
   }
 
   function updatePatchName(name: string) {
@@ -947,11 +1019,12 @@ function StudioPage({
     )
   }
 
-  function updateSelectedLayer(
+  function updateLayerById(
+    layerId: string,
     updater: (layer: StudioLayer) => StudioLayer,
-    options: { preview?: boolean; status?: string } = {},
+    options: { preview?: boolean; resetDirty?: boolean; status?: string } = {},
   ) {
-    const currentLayer = patchRef.current.layers.find((layer) => layer.id === activeLayerId)
+    const currentLayer = patchRef.current.layers.find((layer) => layer.id === layerId)
 
     if (!currentLayer) {
       return
@@ -959,14 +1032,39 @@ function StudioPage({
 
     const nextPatch = {
       ...patchRef.current,
-      layers: patchRef.current.layers.map((layer) => (layer.id === activeLayerId ? updater(layer) : layer)),
+      layers: patchRef.current.layers.map((layer) => (layer.id === layerId ? updater(layer) : layer)),
     }
 
     commitPatch(nextPatch, options)
   }
 
+  function updateSelectedLayer(
+    updater: (layer: StudioLayer) => StudioLayer,
+    options: { preview?: boolean; resetDirty?: boolean; status?: string } = {},
+  ) {
+    updateLayerById(activeLayerId, updater, options)
+  }
+
   function updateLayerValue(key: LayerNumericKey, value: number) {
     updateSelectedLayer((layer) => ({ ...layer, [key]: value }), { preview: true })
+  }
+
+  function updateLayerStartMs(layerId: string, value: number) {
+    const layer = patchRef.current.layers.find((candidate) => candidate.id === layerId)
+
+    if (!layer) {
+      return
+    }
+
+    const roundedValue = roundToStep(Number.isFinite(value) ? value : 0, STUDIO_LIMITS.layerStartMs.step)
+    const maxStartMs = Math.max(0, patchRef.current.durationMs - layer.durationMs)
+    const nextStartMs = Math.min(Math.max(roundedValue, STUDIO_LIMITS.layerStartMs.min), maxStartMs)
+
+    setSelectedLayerId(layerId)
+    setInspectorTab('layer')
+    updateLayerById(layerId, (currentLayer) => ({ ...currentLayer, startMs: nextStartMs }), {
+      preview: true,
+    })
   }
 
   function updateEnvelopeValue(key: EnvelopeNumericKey, value: number) {
@@ -1020,11 +1118,6 @@ function StudioPage({
   }
 
   function handleAddLayer() {
-    if (patchRef.current.layers.length >= MAX_STUDIO_LAYERS) {
-      setStatus(`This MVP keeps patches to ${MAX_STUDIO_LAYERS} layers.`)
-      return
-    }
-
     const nextLayer = createStudioLayer(
       createLayerId(),
       `Layer ${patchRef.current.layers.length + 1}`,
@@ -1035,13 +1128,12 @@ function StudioPage({
     const nextPatch = { ...patchRef.current, layers: [...patchRef.current.layers, nextLayer] }
 
     setSelectedLayerId(nextLayer.id)
-    setLeftSidebarTab('layers')
     setInspectorTab('layer')
     commitPatch(nextPatch, { status: `Added ${nextLayer.name}.` })
   }
 
   function handleDuplicateLayer() {
-    if (!selectedLayer || patchRef.current.layers.length >= MAX_STUDIO_LAYERS) {
+    if (!selectedLayer) {
       return
     }
 
@@ -1056,7 +1148,6 @@ function StudioPage({
     const nextPatch = { ...patchRef.current, layers: [...patchRef.current.layers, duplicate] }
 
     setSelectedLayerId(duplicate.id)
-    setLeftSidebarTab('layers')
     setInspectorTab('layer')
     commitPatch(nextPatch, { status: `Duplicated ${selectedLayer.name}.` })
   }
@@ -1082,6 +1173,74 @@ function StudioPage({
       { status: `Removed ${layerToRemove.name}.` },
     )
   }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!selectedLayer || event.repeat || isKeyboardShortcutTarget(event.target)) {
+        return
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault()
+
+        if (patchRef.current.layers.length === 1) {
+          setStatus('A patch needs at least one layer.')
+          return
+        }
+
+        const removedIndex = patchRef.current.layers.findIndex((layer) => layer.id === selectedLayer.id)
+        const nextLayers = patchRef.current.layers.filter((layer) => layer.id !== selectedLayer.id)
+        const fallbackLayer = nextLayers[Math.min(removedIndex, nextLayers.length - 1)] ?? nextLayers[0]
+        const normalizedPatch = normalizePatchTimelineBounds({
+          ...patchRef.current,
+          layers: nextLayers,
+        })
+
+        patchRef.current = normalizedPatch
+        setPatch(normalizedPatch)
+        setHasPatchChanges(true)
+        setSelectedLayerId(fallbackLayer?.id ?? 'layer-1')
+        setStatus(`Removed ${selectedLayer.name}.`)
+        return
+      }
+
+      if (
+        event.code === 'KeyD' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault()
+
+        const duplicate = createStudioLayer(createLayerId(), `${selectedLayer.name} Copy`, {
+          ...selectedLayer,
+          id: createLayerId(),
+          name: `${selectedLayer.name} Copy`,
+          pan: Math.max(-1, Math.min(1, selectedLayer.pan * -1 || 0.18)),
+          detuneCents: selectedLayer.detuneCents + 12,
+          startMs: selectedLayer.startMs + 12,
+        })
+        const normalizedPatch = normalizePatchTimelineBounds({
+          ...patchRef.current,
+          layers: [...patchRef.current.layers, duplicate],
+        })
+
+        patchRef.current = normalizedPatch
+        setPatch(normalizedPatch)
+        setHasPatchChanges(true)
+        setSelectedLayerId(duplicate.id)
+        setInspectorTab('layer')
+        setStatus(`Duplicated ${selectedLayer.name}.`)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selectedLayer])
 
   function handleMoveLayer(direction: -1 | 1) {
     if (!selectedLayer) {
@@ -1208,115 +1367,43 @@ function StudioPage({
         </div>
       </section>
 
-      <section className="studio-workspace" style={workspaceStyle}>
-        <aside className="studio-pane studio-pane--left">
-          <div className="studio-pane__header">
-            <div>
-              <p className="studio-panel-kicker">Workspace</p>
-              <h2>Sources and stack</h2>
+      <section className={`studio-workspace${!isLeftPanelOpen ? ' is-left-collapsed' : ''}${!isRightPanelOpen ? ' is-right-collapsed' : ''}`} style={workspaceStyle}>
+        <aside className={`studio-pane studio-pane--left ${!isLeftPanelOpen ? 'is-collapsed' : ''}`}>
+          <button
+            type="button"
+            className="studio-pane-rail studio-pane-rail--left"
+            aria-label={`${isLeftPanelOpen ? 'Collapse' : 'Expand'} source browser`}
+            aria-controls="studio-left-pane-content"
+            aria-expanded={isLeftPanelOpen}
+            onClick={() => setIsLeftPanelOpen((current) => !current)}
+          >
+            <span className="studio-pane-rail__icon">
+              <BrowserRailIcon />
+            </span>
+            <span className="studio-pane-rail__chevron">
+              <ChevronIcon direction={isLeftPanelOpen ? 'left' : 'right'} />
+            </span>
+          </button>
+
+          <div
+            id="studio-left-pane-content"
+            className="studio-pane__content studio-pane__content--left"
+            hidden={!isLeftPanelOpen}
+          >
+            <div className="studio-pane__header">
+              <div>
+                <p className="studio-panel-kicker">Browser</p>
+                <h2>Patch browser</h2>
+              </div>
+              <span>{availableSources.length} sources</span>
             </div>
-            <span>{patch.layers.length}/{MAX_STUDIO_LAYERS} layers</span>
-          </div>
 
-          <div className="studio-tab-bar" role="tablist" aria-label="Studio library and layers">
-            <button
-              type="button"
-              role="tab"
-              className={`studio-tab ${leftSidebarTab === 'layers' ? 'is-active' : ''}`}
-              aria-selected={leftSidebarTab === 'layers'}
-              onClick={() => setLeftSidebarTab('layers')}
-            >
-              Layers
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={`studio-tab ${leftSidebarTab === 'browser' ? 'is-active' : ''}`}
-              aria-selected={leftSidebarTab === 'browser'}
-              onClick={() => setLeftSidebarTab('browser')}
-            >
-              Browser
-            </button>
-          </div>
-
-          <div className="studio-pane__body">
-            {leftSidebarTab === 'layers' ? (
-              <section className="studio-section-card studio-section-card--fill">
-                <div className="studio-panel-head">
-                  <div>
-                    <p className="studio-panel-kicker">Layers</p>
-                    <h2>Patch stack</h2>
-                  </div>
-                  <span>{selectedLayer?.name ?? 'No selection'}</span>
-                </div>
-
-                <div className="studio-layer-actions">
-                  <button type="button" className="studio-toolbar-button" onClick={handleAddLayer}>
-                    Add layer
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-toolbar-button"
-                    onClick={handleDuplicateLayer}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-toolbar-button"
-                    onClick={() => handleRemoveLayer()}
-                  >
-                    Delete
-                  </button>
-                </div>
-
-                <div className="studio-list-scroll studio-layer-list" role="list" aria-label="Patch layers">
-                  {patch.layers.map((layer) => {
-                    const isSelected = layer.id === selectedLayer?.id
-
-                    return (
-                      <div key={layer.id} className={`studio-layer-card ${isSelected ? 'is-active' : ''}`}>
-                        <button
-                          type="button"
-                          className="studio-layer-main"
-                          onClick={() => {
-                            setSelectedLayerId(layer.id)
-                            setInspectorTab('layer')
-                          }}
-                        >
-                          <strong>{layer.name}</strong>
-                          <span>
-                            {formatWaveformLabel(layer.waveform)} • {formatMilliseconds(layer.durationMs)}
-                          </span>
-                        </button>
-                        <div className="studio-layer-card__actions">
-                          <button type="button" onClick={() => toggleLayerEnabled(layer.id)}>
-                            {layer.enabled ? 'Mute' : 'On'}
-                          </button>
-                          <button type="button" onClick={() => toggleLayerSolo(layer.id)}>
-                            {layer.solo ? 'Soloed' : 'Solo'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedLayerId(layer.id)
-                              setInspectorTab('layer')
-                            }}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            ) : (
+            <div className="studio-pane__body">
               <section className="studio-section-card studio-section-card--fill">
                 <div className="studio-panel-head">
                   <div>
                     <p className="studio-panel-kicker">Source</p>
-                    <h2>Patch browser</h2>
+                    <h2>Load a starting point</h2>
                   </div>
                   <span>{availableSources.length} sources</span>
                 </div>
@@ -1331,10 +1418,7 @@ function StudioPage({
                         type="button"
                         className={`studio-source-card ${isActive ? 'is-active' : ''}`}
                         aria-pressed={isActive}
-                        onClick={() => {
-                          setSelectedLibraryId(source.id)
-                          handlePatchSourceSelect(source.id, source.source)
-                        }}
+                        onClick={() => handlePatchSourceSelect(source.id, source.source)}
                       >
                         <span>{source.source === 'studio' ? 'Studio patch' : 'Landing preset'}</span>
                         <strong>{source.name}</strong>
@@ -1344,17 +1428,19 @@ function StudioPage({
                   })}
                 </div>
               </section>
-            )}
+            </div>
           </div>
         </aside>
 
-        <div
-          className="studio-resizer studio-resizer--left"
-          role="separator"
-          aria-label="Resize left studio sidebar"
-          aria-orientation="vertical"
-          onPointerDown={beginResize('left')}
-        />
+        {isLeftPanelOpen ? (
+          <div
+            className="studio-resizer studio-resizer--left"
+            role="separator"
+            aria-label="Resize left studio sidebar"
+            aria-orientation="vertical"
+            onPointerDown={beginResize('left')}
+          />
+        ) : null}
 
         <section className="studio-pane studio-pane--center">
           <div className="studio-wave-card">
@@ -1401,7 +1487,26 @@ function StudioPage({
                 <p className="studio-panel-kicker">Timeline</p>
                 <h2>Layer editor</h2>
               </div>
-              <span>Drag clips to move them. Drag the edge to resize.</span>
+              <div className="studio-panel-head__actions">
+                <p className="studio-panel-copy">
+                  {patch.layers.length} layers. Drag clips to move them. Drag the edge to resize.
+                </p>
+                <div className="studio-panel-actions">
+                  <button type="button" className="studio-toolbar-button" onClick={handleAddLayer}>
+                    Add layer
+                  </button>
+                  <button type="button" className="studio-toolbar-button" onClick={handleDuplicateLayer}>
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-toolbar-button"
+                    onClick={() => handleRemoveLayer()}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="studio-timeline-scroll">
@@ -1441,10 +1546,31 @@ function StudioPage({
                         }}
                       >
                         <strong>{layer.name}</strong>
-                        <span>
-                          {formatMilliseconds(layer.startMs)} start • {formatMilliseconds(layer.durationMs)}
-                        </span>
+                        <span>{formatMilliseconds(layer.durationMs)} long</span>
                       </button>
+
+                      <label className="studio-timeline-track-start" htmlFor={`layer-start-${layer.id}`}>
+                        <span>Start</span>
+                        <div className="studio-timeline-track-start__field">
+                          <input
+                            id={`layer-start-${layer.id}`}
+                            type="number"
+                            min={0}
+                            max={Math.max(0, patch.durationMs - layer.durationMs)}
+                            step={STUDIO_LIMITS.layerStartMs.step}
+                            aria-label={`Start time for ${layer.name}`}
+                            value={layer.startMs}
+                            onFocus={() => {
+                              setSelectedLayerId(layer.id)
+                              setInspectorTab('layer')
+                            }}
+                            onChange={(event) => updateLayerStartMs(layer.id, Number(event.currentTarget.value))}
+                            onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                            onBlur={handleRangeCommit}
+                          />
+                          <small>ms</small>
+                        </div>
+                      </label>
 
                       <div className="studio-timeline-track-head__actions">
                         <button
@@ -1521,51 +1647,38 @@ function StudioPage({
           </section>
         </section>
 
-        <div
-          className="studio-resizer studio-resizer--right"
-          role="separator"
-          aria-label="Resize right studio inspector"
-          aria-orientation="vertical"
-          onPointerDown={beginResize('right')}
-        />
+        {isRightPanelOpen ? (
+          <div
+            className="studio-resizer studio-resizer--right"
+            role="separator"
+            aria-label="Resize right studio inspector"
+            aria-orientation="vertical"
+            onPointerDown={beginResize('right')}
+          />
+        ) : null}
 
-        <aside className="studio-pane studio-pane--right">
-          <div className="studio-pane__header">
-            <div>
-              <p className="studio-panel-kicker">Inspector</p>
-              <h2>{selectedLayer?.name ?? patch.name}</h2>
+        <aside className={`studio-pane studio-pane--right ${!isRightPanelOpen ? 'is-collapsed' : ''}`}>
+          <div
+            id="studio-right-pane-content"
+            className="studio-pane__content studio-pane__content--right"
+            hidden={!isRightPanelOpen}
+          >
+            <div className="studio-pane__header">
+              <div>
+                <p className="studio-panel-kicker">Inspector</p>
+                <h2>{selectedLayer?.name ?? patch.name}</h2>
+              </div>
+              <div className="studio-reorder-actions">
+                <button type="button" onClick={() => handleMoveLayer(-1)}>
+                  Up
+                </button>
+                <button type="button" onClick={() => handleMoveLayer(1)}>
+                  Down
+                </button>
+              </div>
             </div>
-            <div className="studio-reorder-actions">
-              <button type="button" onClick={() => handleMoveLayer(-1)}>
-                Up
-              </button>
-              <button type="button" onClick={() => handleMoveLayer(1)}>
-                Down
-              </button>
-            </div>
-          </div>
 
-          <div className="studio-tab-bar studio-tab-bar--inspector" role="tablist" aria-label="Inspector sections">
-            {([
-              ['layer', 'Layer'],
-              ['envelope', 'Envelope'],
-              ['filter', 'Filter'],
-              ['master', 'Master'],
-            ] as Array<[InspectorTab, string]>).map(([tabId, label]) => (
-              <button
-                key={tabId}
-                type="button"
-                role="tab"
-                className={`studio-tab ${inspectorTab === tabId ? 'is-active' : ''}`}
-                aria-selected={inspectorTab === tabId}
-                onClick={() => setInspectorTab(tabId)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="studio-pane__body">
+            <div className="studio-pane__body">
             {inspectorTab === 'layer' && selectedLayer ? (
               <section className="studio-section-card studio-section-card--fill">
                 <div className="studio-panel-head">
@@ -1747,6 +1860,46 @@ function StudioPage({
                 </div>
               </section>
             ) : null}
+            </div>
+          </div>
+
+          <div className="studio-pane-rail studio-pane-rail--right">
+            <button
+              type="button"
+              className="studio-pane-rail__toggle"
+              aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector`}
+              aria-controls="studio-right-pane-content"
+              aria-expanded={isRightPanelOpen}
+              onClick={() => setIsRightPanelOpen((current) => !current)}
+            >
+              <span className="studio-pane-rail__icon">
+                <InspectorRailIcon />
+              </span>
+              <span className="studio-pane-rail__chevron">
+                <ChevronIcon direction={isRightPanelOpen ? 'right' : 'left'} />
+              </span>
+            </button>
+
+            <div className="studio-pane-rail__tabs" role="tablist" aria-label="Inspector sections">
+              {INSPECTOR_TAB_ITEMS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
+                  aria-controls="studio-right-pane-content"
+                  aria-label={`${tab.label} inspector`}
+                  aria-selected={inspectorTab === tab.id}
+                  title={tab.label}
+                  onClick={() => {
+                    setInspectorTab(tab.id)
+                    setIsRightPanelOpen(true)
+                  }}
+                >
+                  {tab.railLabel}
+                </button>
+              ))}
+            </div>
           </div>
         </aside>
       </section>

@@ -86,7 +86,7 @@ describe('StudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add layer/i }))
 
-    expect(screen.getByText(/3\/4/)).toBeInTheDocument()
+    expect(screen.getByText(/3 layers\. drag clips to move them\./i)).toBeInTheDocument()
     expect(screen.getAllByText(/layer 3/i).length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /play patch/i }))
@@ -138,7 +138,26 @@ describe('StudioPage', () => {
 
     fireEvent.change(screen.getByLabelText(/patch duration/i), { target: { value: '120' } })
 
-    expect(screen.getByRole('group', { name: /layer timeline/i })).toHaveTextContent(/0 ms start • 120 ms/i)
+    expect(screen.getAllByLabelText(/start time for/i)[0]).toHaveValue(0)
+  })
+
+  it('lets the start time be edited precisely from the timeline head', () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const startInput = screen.getAllByLabelText(/start time for/i)[0]
+
+    fireEvent.change(startInput, { target: { value: '1' } })
+
+    expect(startInput).toHaveValue(1)
   })
 
   it('previews after dragging a timeline clip', async () => {
@@ -236,7 +255,93 @@ describe('StudioPage', () => {
     expect(transport.play).not.toHaveBeenCalled()
   })
 
-  it('deletes a specific layer from the layers panel', async () => {
+  it('collapses and re-expands the side panels from their rails', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /collapse source browser/i }))
+
+    expect(screen.queryByRole('heading', { name: /patch browser/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /expand source browser/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+
+    await user.click(screen.getByRole('button', { name: /collapse inspector/i }))
+
+    expect(screen.queryByRole('heading', { name: /body/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /expand inspector/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+
+    await user.click(screen.getByRole('button', { name: /expand source browser/i }))
+    await user.click(screen.getByRole('tab', { name: /master inspector/i }))
+
+    expect(screen.getByRole('heading', { name: /patch browser/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /patch bus/i })).toBeInTheDocument()
+  })
+
+  it('warns before loading a browser preset when the patch was modified', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /add layer/i }))
+
+    const sourceCards = within(screen.getByLabelText(/studio patch browser/i)).getAllByRole('button')
+    await user.click(sourceCards[0])
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('group', { name: /layer timeline/i })).toHaveTextContent(/layer 3/i)
+
+    confirmSpy.mockRestore()
+  })
+
+  it('supports duplicate and delete keyboard shortcuts for the selected layer', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /add layer/i }))
+    await user.click(screen.getByRole('button', { name: /select layer 3 in timeline/i }))
+
+    fireEvent.keyDown(window, { code: 'KeyD', key: 'd' })
+
+    expect(screen.getByRole('group', { name: /layer timeline/i })).toHaveTextContent(/layer 3 copy/i)
+
+    fireEvent.keyDown(window, { code: 'Delete', key: 'Delete' })
+
+    expect(screen.getByRole('group', { name: /layer timeline/i })).not.toHaveTextContent(/layer 3 copy/i)
+  })
+
+  it('deletes a specific layer from the timeline actions', async () => {
     const { transport } = createPreviewHarness()
     const save = vi.fn()
     const user = userEvent.setup()
@@ -251,10 +356,10 @@ describe('StudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add layer/i }))
 
-    await user.click(within(screen.getByRole('list', { name: /patch layers/i })).getByRole('button', { name: /layer 3/i }))
+    await user.click(screen.getByRole('button', { name: /select layer 3 in timeline/i }))
     await user.click(screen.getByRole('button', { name: /^delete$/i }))
 
     expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)
-    expect(within(screen.getByLabelText(/patch layers/i)).queryAllByText(/layer 3/i)).toHaveLength(0)
+    expect(screen.getByRole('group', { name: /layer timeline/i })).not.toHaveTextContent(/layer 3/i)
   })
 })
