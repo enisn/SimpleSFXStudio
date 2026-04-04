@@ -73,6 +73,26 @@ describe('StudioPage', () => {
     })
   })
 
+  it('renders layers inside the timeline editor', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /add layer/i }))
+
+    expect(screen.getByRole('heading', { name: /final waveform/i })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /layer timeline/i })).toHaveTextContent(/layer 3/i)
+    expect(screen.getByRole('button', { name: /timeline track for layer 3/i })).toBeInTheDocument()
+  })
+
   it('deletes a specific layer from the layers panel', async () => {
     const { transport } = createPreviewHarness()
     const save = vi.fn()
@@ -88,7 +108,7 @@ describe('StudioPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add layer/i }))
 
-    await user.click(screen.getByRole('button', { name: /layer 3/i }))
+    await user.click(within(screen.getByRole('list', { name: /patch layers/i })).getByRole('button', { name: /layer 3/i }))
     await user.click(screen.getByRole('button', { name: /^delete$/i }))
 
     expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)

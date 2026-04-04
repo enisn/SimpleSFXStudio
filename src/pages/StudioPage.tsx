@@ -65,6 +65,9 @@ const DEFAULT_RIGHT_PANEL_WIDTH = 380
 const MIN_SIDEBAR_WIDTH = 260
 const MAX_SIDEBAR_WIDTH = 460
 const MIN_CENTER_WIDTH = 540
+const TIMELINE_MARKER_DIVISIONS = 8
+const TIMELINE_LAYER_WAVE_WIDTH = 720
+const TIMELINE_LAYER_WAVE_HEIGHT = 72
 
 type LayerNumericKey =
   | 'gain'
@@ -85,6 +88,7 @@ type MasterNumericKey = keyof StudioMasterSettings
 type LeftSidebarTab = 'layers' | 'browser'
 type InspectorTab = 'layer' | 'envelope' | 'filter' | 'master'
 type ResizePane = 'left' | 'right'
+type TimelineDragMode = 'move' | 'resize-end'
 
 type SliderConfig<Key extends string> = {
   key: Key
@@ -99,6 +103,15 @@ type ResizeState = {
   pane: ResizePane
   startX: number
   startWidth: number
+}
+
+type TimelineDragState = {
+  layerId: string
+  mode: TimelineDragMode
+  startX: number
+  startMs: number
+  durationMs: number
+  didChange: boolean
 }
 
 type WorkspaceStyle = CSSProperties & {
@@ -322,6 +335,43 @@ function clampPanelWidth(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function roundToStep(value: number, step: number) {
+  return Math.round(value / step) * step
+}
+
+function constrainLayerToPatchDuration(layer: StudioLayer, patchDurationMs: number) {
+  const maxDurationMs = Math.max(
+    STUDIO_LIMITS.layerDurationMs.min,
+    Math.min(STUDIO_LIMITS.layerDurationMs.max, patchDurationMs),
+  )
+  const durationMs = Math.min(layer.durationMs, maxDurationMs)
+  const maxStartMs = Math.max(0, patchDurationMs - durationMs)
+
+  return {
+    ...layer,
+    startMs: Math.min(Math.max(layer.startMs, 0), maxStartMs),
+    durationMs,
+  }
+}
+
+function getTimelineClipStyle(layer: StudioLayer, patchDurationMs: number): CSSProperties {
+  const safePatchDurationMs = Math.max(patchDurationMs, 1)
+  const clipStartMs = Math.min(Math.max(layer.startMs, 0), safePatchDurationMs)
+  const clipEndMs = Math.min(safePatchDurationMs, layer.startMs + layer.durationMs)
+  const leftPercent = (clipStartMs / safePatchDurationMs) * 100
+  const maxWidthPercent = Math.max(0, 100 - leftPercent)
+  const visibleDurationMs = Math.max(0, clipEndMs - clipStartMs)
+  const widthPercent = Math.min(
+    maxWidthPercent,
+    Math.max(Math.min(2.4, maxWidthPercent), (visibleDurationMs / safePatchDurationMs) * 100),
+  )
+
+  return {
+    left: `${leftPercent}%`,
+    width: `${widthPercent}%`,
+  }
+}
+
 function getStoredStudioPatch() {
   if (typeof window === 'undefined') {
     return null
@@ -400,7 +450,7 @@ function StudioPage({
   const [status, setStatus] = useState(
     importedPreset
       ? `Imported ${importedPreset.name} from the landing page into the advanced studio.`
-      : 'Advanced studio ready. Drag pane dividers, switch tabs, and audition without page scrolling.',
+      : 'Advanced studio ready. Drag clips in the timeline, resize layers, and audition without page scrolling.',
   )
   const [isPlaying, setIsPlaying] = useState(false)
   const [livePreview, setLivePreview] = useState(false)
@@ -418,6 +468,8 @@ function StudioPage({
   const patchRef = useRef(patch)
   const panelWidthsRef = useRef({ left: leftPanelWidth, right: rightPanelWidth })
   const resizeStateRef = useRef<ResizeState | null>(null)
+  const timelineMeasureRef = useRef<HTMLDivElement | null>(null)
+  const timelineDragStateRef = useRef<TimelineDragState | null>(null)
 
   const activeLayerId = patch.layers.some((layer) => layer.id === selectedLayerId)
     ? selectedLayerId
@@ -444,6 +496,47 @@ function StudioPage({
     const render = renderStudioPatch(patch, { sampleRate: 6000, seed: 17 })
     return toWaveformPath(mixStereoForDisplay(render), 960, 300)
   }, [patch])
+  const timelineMarkers = useMemo(
+    () =>
+      Array.from({ length: TIMELINE_MARKER_DIVISIONS + 1 }, (_, index) => {
+        const ratio = index / TIMELINE_MARKER_DIVISIONS
+
+        return {
+          id: `marker-${index}`,
+          label: formatMilliseconds(Math.round(patch.durationMs * ratio)),
+          left: `${ratio * 100}%`,
+        }
+      }),
+    [patch.durationMs],
+  )
+  const layerWaveformPaths = useMemo(
+    () =>
+      Object.fromEntries(
+        patch.layers.map((layer) => {
+          const render = renderStudioPatch(
+            {
+              ...patch,
+              layers: [{ ...layer, enabled: true, solo: false }],
+              master: {
+                ...patch.master,
+                gain: 1,
+                drive: 0,
+                delayMix: 0,
+                delayFeedback: 0,
+                stereoWidth: 1,
+              },
+            },
+            { sampleRate: 3000, seed: 17 },
+          )
+
+          return [
+            layer.id,
+            toWaveformPath(mixStereoForDisplay(render), TIMELINE_LAYER_WAVE_WIDTH, TIMELINE_LAYER_WAVE_HEIGHT),
+          ]
+        }),
+      ) as Record<string, string>,
+    [patch],
+  )
   const workspaceStyle = useMemo<WorkspaceStyle>(
     () => ({
       '--studio-left-width': `${leftPanelWidth}px`,
@@ -471,6 +564,7 @@ function StudioPage({
     return () => {
       delete document.body.dataset.studio
       delete document.body.dataset.resizing
+      delete document.body.dataset.timelineDrag
     }
   }, [])
 
@@ -602,6 +696,100 @@ function StudioPage({
     setStatus(message)
   }, [clearScheduledPreview, previewTransport])
 
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = timelineDragStateRef.current
+
+      if (!dragState) {
+        return
+      }
+
+      const timelineWidth = timelineMeasureRef.current?.getBoundingClientRect().width ?? 0
+
+      if (timelineWidth <= 0) {
+        return
+      }
+
+      const currentPatch = patchRef.current
+      const currentLayer = currentPatch.layers.find((layer) => layer.id === dragState.layerId)
+
+      if (!currentLayer) {
+        return
+      }
+
+      const deltaMs = roundToStep(
+        ((event.clientX - dragState.startX) / timelineWidth) * currentPatch.durationMs,
+        STUDIO_LIMITS.layerStartMs.step,
+      )
+
+      if (dragState.mode === 'move') {
+        const maxStartMs = Math.max(0, currentPatch.durationMs - dragState.durationMs)
+        const nextStartMs = Math.min(Math.max(dragState.startMs + deltaMs, 0), maxStartMs)
+
+        if (nextStartMs === currentLayer.startMs) {
+          return
+        }
+
+        dragState.didChange = true
+        const nextPatch = clampStudioPatch({
+          ...currentPatch,
+          layers: currentPatch.layers.map((layer) =>
+            layer.id === dragState.layerId ? { ...layer, startMs: nextStartMs } : layer,
+          ),
+        })
+        patchRef.current = nextPatch
+        setPatch(nextPatch)
+        return
+      }
+
+      const maxDurationMs = Math.max(
+        STUDIO_LIMITS.layerDurationMs.min,
+        Math.min(STUDIO_LIMITS.layerDurationMs.max, currentPatch.durationMs - dragState.startMs),
+      )
+      const nextDurationMs = Math.min(
+        Math.max(dragState.durationMs + deltaMs, STUDIO_LIMITS.layerDurationMs.min),
+        maxDurationMs,
+      )
+
+      if (nextDurationMs === currentLayer.durationMs) {
+        return
+      }
+
+      dragState.didChange = true
+      const nextPatch = clampStudioPatch({
+        ...currentPatch,
+        layers: currentPatch.layers.map((layer) =>
+          layer.id === dragState.layerId ? { ...layer, durationMs: nextDurationMs } : layer,
+        ),
+      })
+      patchRef.current = nextPatch
+      setPatch(nextPatch)
+    }
+
+    const handlePointerUp = () => {
+      const dragState = timelineDragStateRef.current
+
+      if (!dragState) {
+        return
+      }
+
+      timelineDragStateRef.current = null
+      delete document.body.dataset.timelineDrag
+
+      if (dragState.didChange) {
+        void playPatch(patchRef.current, `Previewing ${patchRef.current.name}.`)
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [playPatch])
+
   const handleRangeCommit = useCallback(() => {
     clearScheduledPreview()
     void playPatch(patchRef.current, `Previewing ${patchRef.current.name}.`)
@@ -622,6 +810,32 @@ function StudioPage({
         startWidth: pane === 'left' ? panelWidthsRef.current.left : panelWidthsRef.current.right,
       }
       document.body.dataset.resizing = pane
+    },
+    [],
+  )
+
+  const beginTimelineDrag = useCallback(
+    (layerId: string, mode: TimelineDragMode) => (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const layer = patchRef.current.layers.find((candidate) => candidate.id === layerId)
+
+      if (!layer) {
+        return
+      }
+
+      setSelectedLayerId(layerId)
+      setInspectorTab('layer')
+      timelineDragStateRef.current = {
+        layerId,
+        mode,
+        startX: event.clientX,
+        startMs: layer.startMs,
+        durationMs: layer.durationMs,
+        didChange: false,
+      }
+      document.body.dataset.timelineDrag = mode
     },
     [],
   )
@@ -693,7 +907,14 @@ function StudioPage({
   }
 
   function updatePatchDuration(durationMs: number) {
-    commitPatch({ ...patchRef.current, durationMs }, { preview: true })
+    commitPatch(
+      {
+        ...patchRef.current,
+        durationMs,
+        layers: patchRef.current.layers.map((layer) => constrainLayerToPatchDuration(layer, durationMs)),
+      },
+      { preview: true },
+    )
   }
 
   function updateSelectedLayer(
@@ -1106,34 +1327,11 @@ function StudioPage({
         />
 
         <section className="studio-pane studio-pane--center">
-          <div className="studio-hero-card">
-            <div className="studio-hero-copy">
-              <p className="studio-panel-kicker">Advanced Studio</p>
-              <h1>{patch.name}</h1>
-              <p>{patch.description}</p>
-            </div>
-
-            <div className="studio-fact-row">
-              <div>
-                <span>Patch length</span>
-                <strong>{formatMilliseconds(patch.durationMs)}</strong>
-              </div>
-              <div>
-                <span>Selected</span>
-                <strong>{selectedLayer?.name ?? 'None'}</strong>
-              </div>
-              <div>
-                <span>Mode</span>
-                <strong>{livePreview ? 'Live preview' : 'Release to preview'}</strong>
-              </div>
-            </div>
-          </div>
-
           <div className="studio-wave-card">
             <div className="studio-panel-head">
               <div>
-                <p className="studio-panel-kicker">Preview</p>
-                <h2>Waveform canvas</h2>
+                <p className="studio-panel-kicker">Mix</p>
+                <h2>Final waveform</h2>
               </div>
               <span>{isPlaying ? 'Playing' : 'Ready'}</span>
             </div>
@@ -1159,52 +1357,137 @@ function StudioPage({
 
             <div className="studio-wave-meta">
               <span>
-                {selectedLayer
-                  ? `${selectedLayer.name}: ${formatFrequency(selectedLayer.startFreq)} to ${formatFrequency(selectedLayer.endFreq)}`
-                  : 'No layer selected.'}
+                {patch.layers.length} layers • {formatMilliseconds(patch.durationMs)}
               </span>
-              <span>
-                {patch.master.delayMix > 0
-                  ? `Delay ${Math.round(patch.master.delayMix * 100)}%`
-                  : 'Dry patch'}
-              </span>
-              <span>{patch.master.stereoWidth.toFixed(2)}x width</span>
+              <span>{selectedLayer ? `Selected ${selectedLayer.name}` : 'No layer selected.'}</span>
+              <span>{livePreview ? 'Live preview' : 'Release to preview'}</span>
             </div>
           </div>
 
-          <div className="studio-summary-grid">
-            <section className="studio-summary-card">
-              <div className="studio-panel-head">
-                <div>
-                  <p className="studio-panel-kicker">Master</p>
-                  <h2>Output bus</h2>
-                </div>
+          <section className="studio-timeline-card">
+            <div className="studio-panel-head">
+              <div>
+                <p className="studio-panel-kicker">Timeline</p>
+                <h2>Layer editor</h2>
               </div>
-              <div className="studio-summary-list">
-                <span>Gain {Math.round(patch.master.gain * 100)}%</span>
-                <span>Drive {Math.round(patch.master.drive * 100)}%</span>
-                <span>Delay {Math.round(patch.master.delayMix * 100)}%</span>
-                <span>Width {patch.master.stereoWidth.toFixed(2)}x</span>
-              </div>
-            </section>
+              <span>Drag clips to move them. Drag the edge to resize.</span>
+            </div>
 
-            <section className="studio-summary-card">
-              <div className="studio-panel-head">
-                <div>
-                  <p className="studio-panel-kicker">Selection</p>
-                  <h2>{selectedLayer?.name ?? 'Layer'}</h2>
+            <div className="studio-timeline-scroll">
+              <div className="studio-timeline-board" role="group" aria-label="Layer timeline">
+                <div className="studio-timeline-ruler-label">
+                  <span>Tracks</span>
+                  <strong>{patch.layers.length} rows</strong>
                 </div>
+
+                <div className="studio-timeline-ruler" ref={timelineMeasureRef}>
+                  {timelineMarkers.map((marker) => (
+                    <div
+                      key={marker.id}
+                      className="studio-timeline-ruler__marker"
+                      style={{ left: marker.left }}
+                    >
+                      <span>{marker.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {patch.layers.flatMap((layer) => {
+                  const isSelected = layer.id === selectedLayer?.id
+
+                  return [
+                    <div
+                      key={`${layer.id}-head`}
+                      className={`studio-timeline-track-head ${isSelected ? 'is-active' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="studio-timeline-track-select"
+                        aria-label={`Select ${layer.name} in timeline`}
+                        onClick={() => {
+                          setSelectedLayerId(layer.id)
+                          setInspectorTab('layer')
+                        }}
+                      >
+                        <strong>{layer.name}</strong>
+                        <span>
+                          {formatMilliseconds(layer.startMs)} start • {formatMilliseconds(layer.durationMs)}
+                        </span>
+                      </button>
+
+                      <div className="studio-timeline-track-head__actions">
+                        <button
+                          type="button"
+                          aria-pressed={!layer.enabled}
+                          aria-label={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
+                          onClick={() => toggleLayerEnabled(layer.id)}
+                        >
+                          {layer.enabled ? 'M' : 'On'}
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={layer.solo}
+                          aria-label={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
+                          onClick={() => toggleLayerSolo(layer.id)}
+                        >
+                          {layer.solo ? 'S' : 'Solo'}
+                        </button>
+                      </div>
+                    </div>,
+                    <div key={`${layer.id}-track`} className={`studio-timeline-track ${isSelected ? 'is-active' : ''}`}>
+                      <button
+                        type="button"
+                        className="studio-timeline-track-surface"
+                        aria-label={`Timeline track for ${layer.name}`}
+                        onClick={() => {
+                          setSelectedLayerId(layer.id)
+                          setInspectorTab('layer')
+                        }}
+                      />
+
+                      <div
+                        className={`studio-timeline-track-clip ${!layer.enabled ? 'is-muted' : ''} ${layer.solo ? 'is-solo' : ''}`}
+                        style={getTimelineClipStyle(layer, patch.durationMs)}
+                        onClick={() => {
+                          setSelectedLayerId(layer.id)
+                          setInspectorTab('layer')
+                        }}
+                        onPointerDown={beginTimelineDrag(layer.id, 'move')}
+                      >
+                        <svg
+                          className="studio-timeline-track-clip__wave"
+                          viewBox={`0 0 ${TIMELINE_LAYER_WAVE_WIDTH} ${TIMELINE_LAYER_WAVE_HEIGHT}`}
+                          aria-hidden="true"
+                        >
+                          <path
+                            className="studio-timeline-track-clip__ghost"
+                            d={`M0 ${TIMELINE_LAYER_WAVE_HEIGHT / 2} L${TIMELINE_LAYER_WAVE_WIDTH} ${TIMELINE_LAYER_WAVE_HEIGHT / 2}`}
+                          />
+                          <path
+                            className="studio-timeline-track-clip__line"
+                            d={layerWaveformPaths[layer.id]}
+                          />
+                        </svg>
+
+                        <div className="studio-timeline-track-clip__meta">
+                          <span>{formatWaveformLabel(layer.waveform)}</span>
+                          <span>
+                            {formatFrequency(layer.startFreq)} to {formatFrequency(layer.endFreq)}
+                          </span>
+                        </div>
+
+                        <div
+                          className="studio-timeline-track-clip__handle"
+                          role="presentation"
+                          onPointerDown={beginTimelineDrag(layer.id, 'resize-end')}
+                        />
+                      </div>
+                    </div>,
+                  ]
+                })}
               </div>
-              {selectedLayer ? (
-                <div className="studio-summary-list">
-                  <span>{formatWaveformLabel(selectedLayer.waveform)}</span>
-                  <span>{formatMilliseconds(selectedLayer.durationMs)}</span>
-                  <span>Pan {Math.round(selectedLayer.pan * 100)}</span>
-                  <span>{selectedLayer.filter.type}</span>
-                </div>
-              ) : null}
-            </section>
-          </div>
+            </div>
+          </section>
         </section>
 
         <div
