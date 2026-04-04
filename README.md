@@ -1,73 +1,98 @@
-# React + TypeScript + Vite
+# Simple SFX Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Simple SFX Studio is a browser-based sound effect generator built with React, TypeScript, and Vite. It lets you preview, tweak, layer, and export short UI and game-style sound effects directly in the browser.
 
-Currently, two official plugins are available:
+Live app: https://sfx-studio.enisn-projects.io/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- Browse and preview built-in sound presets for common UI, feedback, alert, and motion cues.
+- Fine-tune core sound parameters like duration, pitch, waveform, noise, envelope, vibrato, and filtering.
+- Use the advanced studio workspace to build layered patches with timeline editing and per-layer controls.
+- Export generated sounds from the browser.
+- Switch between light, dark, and system theme modes.
+- Persist studio drafts and layout preferences locally in the browser.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Routes
 
-## Expanding the ESLint configuration
+- `/` - preset-driven sound generator
+- `/studio` - advanced layered sound design workspace
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- React 19
+- TypeScript
+- Vite
+- React Router
+- Vitest and Testing Library
+- Nginx and Docker for production serving
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Development
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Requirements
+
+- Node.js 22+
+- npm
+
+### Install
+
+```bash
+npm ci
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Start the dev server
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+### Build for production
+
+```bash
+npm run build
+```
+
+### Preview the production build
+
+```bash
+npm run preview
+```
+
+### Run checks
+
+```bash
+npm run lint
+npm run test
+```
+
+## Docker
+
+Build the image:
+
+```bash
+docker build -t simple-sfx-studio .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8080:80 simple-sfx-studio
+```
+
+Then open `http://localhost:8080`.
+
+## Project Structure
+
+```text
+src/
+  app/            Application shell and routing
+  audio/          Sound synthesis, presets, runtime, and display helpers
+  pages/          Landing page and studio workspace
+  test/           Test setup
+public/           Static assets
+dist/             Production build output
+```
+
+## License
+
+Licensed under the Apache License 2.0. See `LICENSE` for details.
