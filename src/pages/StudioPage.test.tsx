@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -71,5 +71,28 @@ describe('StudioPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent(/ready to replay/i)
     })
+  })
+
+  it('deletes a specific layer from the layers panel', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /add layer/i }))
+
+    const layerCards = screen.getAllByRole('button', { name: /delete/i })
+    await user.click(layerCards[layerCards.length - 1]!)
+
+    expect(screen.queryAllByText(/layer 3/i)).toHaveLength(0)
+    expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)
+    expect(within(screen.getByLabelText(/patch layers/i)).queryAllByText(/layer 3/i)).toHaveLength(0)
   })
 })
