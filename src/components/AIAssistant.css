@@ -75,6 +75,13 @@
   background: linear-gradient(135deg, #7dd3fc, #2dd4bf);
 }
 
+.assistant-bubble__orb svg,
+.assistant-inline-button svg,
+.assistant-submit__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
 .assistant-bubble__copy {
   display: grid;
   gap: 2px;
@@ -87,7 +94,6 @@
 }
 
 .assistant-bubble__copy small,
-.assistant-drawer__note,
 .assistant-drawer__meta,
 .assistant-message__role,
 .assistant-composer__field span {
@@ -99,12 +105,12 @@
   right: 20px;
   bottom: 104px;
   z-index: 29;
-  width: min(420px, calc(100vw - 24px));
-  max-height: min(78dvh, 760px);
+  width: min(560px, calc(100vw - 28px));
+  height: min(84dvh, 860px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 14px;
-  padding: 18px;
+  gap: 16px;
+  padding: 20px;
   border: 1px solid rgba(94, 234, 212, 0.2);
   border-radius: 26px;
   color: var(--wave-card-text);
@@ -114,6 +120,7 @@
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
   opacity: 0;
   pointer-events: none;
+  overflow: hidden;
   transform: translateY(16px) scale(0.98);
   transition:
     opacity 180ms ease,
@@ -127,28 +134,39 @@
 }
 
 .assistant-drawer__header,
+.assistant-drawer__headline,
 .assistant-drawer__actions,
 .assistant-drawer__meta,
-.assistant-suggestions,
 .assistant-composer {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .assistant-drawer__header,
 .assistant-drawer__meta,
-.assistant-composer {
+.assistant-composer,
+.assistant-drawer__actions {
   justify-content: space-between;
 }
 
 .assistant-drawer__header {
-  align-items: start;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .assistant-drawer__actions,
-.assistant-drawer__meta,
-.assistant-suggestions {
+.assistant-drawer__meta {
   flex-wrap: wrap;
+}
+
+.assistant-drawer__headline {
+  flex: 1;
+  min-width: 0;
+}
+
+.assistant-drawer__actions {
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .assistant-drawer__kicker {
@@ -161,27 +179,24 @@
 }
 
 .assistant-drawer__header h2,
-.assistant-drawer__note,
 .assistant-thread,
 .assistant-composer__field {
   margin: 0;
-}
-
-.assistant-drawer__note {
-  max-width: 34ch;
 }
 
 .assistant-drawer__meta {
   font-family: var(--font-mono);
   font-size: 0.76rem;
   letter-spacing: 0.08em;
+  align-items: center;
 }
 
 .assistant-thread {
   overflow: auto;
   display: grid;
-  gap: 10px;
-  padding-right: 6px;
+  gap: 12px;
+  min-height: 0;
+  padding-right: 8px;
 }
 
 .assistant-message,
@@ -200,8 +215,8 @@
 }
 
 .assistant-message {
-  max-width: 92%;
-  padding: 12px 14px;
+  max-width: 88%;
+  padding: 14px 16px;
   background: rgba(255, 255, 255, 0.05);
 }
 
@@ -237,7 +252,10 @@
 }
 
 .assistant-suggestions {
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
 }
 
 .assistant-suggestion,
@@ -257,12 +275,27 @@
   padding: 9px 12px;
 }
 
+.assistant-inline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.assistant-inline-button--icon {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 12px;
+}
+
 .assistant-suggestion {
   text-align: left;
+  line-height: 1.45;
 }
 
 .assistant-composer {
-  align-items: end;
+  align-items: stretch;
+  flex-direction: column;
 }
 
 .assistant-composer__field {
@@ -274,14 +307,20 @@
 .assistant-composer__field textarea {
   width: 100%;
   resize: vertical;
-  min-height: 110px;
+  min-height: 132px;
+  max-height: 240px;
   padding: 12px 14px;
   color: var(--wave-card-text);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .assistant-submit {
-  min-width: 132px;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 156px;
   padding: 14px 16px;
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.84), rgba(20, 184, 166, 0.88));
 }
@@ -318,16 +357,25 @@
     bottom: 92px;
     left: 12px;
     width: auto;
-    max-height: min(76dvh, 720px);
+    height: min(82dvh, 760px);
     padding: 16px;
   }
 
-  .assistant-drawer__header,
-  .assistant-composer {
+  .assistant-drawer__header {
     flex-direction: column;
+  }
+
+  .assistant-drawer__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .assistant-suggestions {
+    grid-template-columns: 1fr;
   }
 
   .assistant-submit {
     width: 100%;
+    align-self: stretch;
   }
 }

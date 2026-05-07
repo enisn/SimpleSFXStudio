@@ -2086,7 +2086,6 @@ function StudioPage({
         error={assistantError}
         inputValue={assistantPrompt}
         messages={assistantMessages}
-        currentPatchName={patch.name}
         canUndo={assistantUndoState !== null}
         onInputChange={setAssistantPrompt}
         onSubmit={handleAssistantSubmit}
