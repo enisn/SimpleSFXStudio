@@ -42,6 +42,7 @@ Desktop.ini
 # Local test artifacts
 playwright-report/
 test-results/
+.playwright-mcp/
 
 # Local Docker overrides
 docker-compose.override.yml

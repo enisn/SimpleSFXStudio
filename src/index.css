@@ -52,6 +52,31 @@
   --wave-kicker: rgba(125, 211, 252, 0.92);
   --wave-label-bg: rgba(255, 255, 255, 0.06);
   --focus-ring: 0 0 0 3px rgba(15, 118, 110, 0.22);
+  --assistant-text: var(--ink);
+  --assistant-muted: var(--muted);
+  --assistant-kicker: var(--accent);
+  --assistant-bubble-border: rgba(15, 118, 110, 0.2);
+  --assistant-bubble-border-active: rgba(15, 118, 110, 0.36);
+  --assistant-bubble-bg:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 40%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(244, 236, 224, 0.96));
+  --assistant-bubble-shadow: 0 20px 44px rgba(25, 38, 54, 0.18);
+  --assistant-bubble-orb-ink: #062026;
+  --assistant-bubble-orb-bg: linear-gradient(135deg, #7dd3fc, #2dd4bf);
+  --assistant-surface-bg:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.97), rgba(243, 236, 224, 0.96)),
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.1), transparent 42%);
+  --assistant-surface-border: rgba(15, 118, 110, 0.16);
+  --assistant-surface-shadow: 0 28px 60px rgba(25, 38, 54, 0.18);
+  --assistant-control-border: rgba(23, 32, 42, 0.12);
+  --assistant-control-bg: rgba(255, 255, 255, 0.72);
+  --assistant-message-bg: rgba(255, 255, 255, 0.72);
+  --assistant-message-assistant-bg: rgba(255, 255, 255, 0.64);
+  --assistant-message-user-bg: linear-gradient(135deg, rgba(15, 118, 110, 0.22), rgba(217, 119, 6, 0.12));
+  --assistant-error-text: #b91c1c;
+  --assistant-error-bg: rgba(248, 113, 113, 0.16);
+  --assistant-submit-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  --assistant-submit-text: var(--accent-contrast);
 }
 
 :root[data-theme='dark'] {
@@ -91,6 +116,25 @@
   --wave-kicker: rgba(125, 211, 252, 0.96);
   --wave-label-bg: rgba(255, 255, 255, 0.06);
   --focus-ring: 0 0 0 3px rgba(45, 212, 191, 0.22);
+  --assistant-bubble-border: rgba(56, 189, 248, 0.22);
+  --assistant-bubble-border-active: rgba(94, 234, 212, 0.44);
+  --assistant-bubble-bg:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.26), transparent 40%),
+    linear-gradient(135deg, rgba(9, 18, 31, 0.96), rgba(15, 23, 42, 0.92));
+  --assistant-bubble-shadow: 0 20px 44px rgba(8, 15, 28, 0.32);
+  --assistant-surface-bg:
+    linear-gradient(180deg, rgba(4, 12, 22, 0.97), rgba(10, 19, 34, 0.95)),
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.12), transparent 42%);
+  --assistant-surface-border: rgba(94, 234, 212, 0.2);
+  --assistant-surface-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
+  --assistant-control-border: rgba(173, 190, 204, 0.14);
+  --assistant-control-bg: rgba(255, 255, 255, 0.06);
+  --assistant-message-bg: rgba(255, 255, 255, 0.05);
+  --assistant-message-assistant-bg: rgba(255, 255, 255, 0.06);
+  --assistant-message-user-bg: linear-gradient(135deg, rgba(15, 118, 110, 0.34), rgba(30, 41, 59, 0.92));
+  --assistant-error-text: #fda4af;
+  --assistant-error-bg: rgba(127, 29, 29, 0.24);
+  --assistant-submit-bg: linear-gradient(135deg, rgba(14, 165, 233, 0.84), rgba(20, 184, 166, 0.88));
 }
 
 * {
