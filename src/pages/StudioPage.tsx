@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { StudioAssistantBubble, StudioAssistantPanel } from '../components/AIAssistant'
 import './StudioPage.css'
 import {
   formatFrequency,
@@ -18,6 +19,17 @@ import {
 } from '../audio/display'
 import { PRESETS } from '../audio/presets'
 import { getSimplePresetById, simplePresetToStudioPatch } from '../audio/studio/adapters'
+import {
+  applyAssistantOperations,
+  buildStudioAssistantContext,
+  type AssistantChatMessage,
+} from '../audio/studio/assistant'
+import {
+  constrainLayerToPatchDuration,
+  createLayerId,
+  normalizePatchTimelineBounds,
+  roundToStep,
+} from '../audio/studio/patchUtils'
 import { STUDIO_PATCHES } from '../audio/studio/presets'
 import { mixStereoForDisplay, renderStudioPatch } from '../audio/studio/synthesis'
 import {
@@ -28,7 +40,6 @@ import {
 import {
   STUDIO_DRAFT_STORAGE_KEY,
   STUDIO_LIMITS,
-  clampStudioPatch,
   cloneStudioPatch,
   createStudioLayer,
   varyStudioLayer,
@@ -37,6 +48,7 @@ import {
   type StudioMasterSettings,
   type StudioPatch,
 } from '../audio/studio/types'
+import { requestStudioAssistant } from '../features/assistant/api'
 import {
   THEME_MODES,
   THEME_STORAGE_KEY,
@@ -347,34 +359,6 @@ function clampPanelWidth(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function roundToStep(value: number, step: number) {
-  return Math.round(value / step) * step
-}
-
-function constrainLayerToPatchDuration(layer: StudioLayer, patchDurationMs: number) {
-  const maxDurationMs = Math.max(
-    STUDIO_LIMITS.layerDurationMs.min,
-    Math.min(STUDIO_LIMITS.layerDurationMs.max, patchDurationMs),
-  )
-  const durationMs = Math.min(layer.durationMs, maxDurationMs)
-  const maxStartMs = Math.max(0, patchDurationMs - durationMs)
-
-  return {
-    ...layer,
-    startMs: Math.min(Math.max(layer.startMs, 0), maxStartMs),
-    durationMs,
-  }
-}
-
-function normalizePatchTimelineBounds(patch: StudioPatch) {
-  const clampedPatch = clampStudioPatch(patch)
-
-  return {
-    ...clampedPatch,
-    layers: clampedPatch.layers.map((layer) => constrainLayerToPatchDuration(layer, clampedPatch.durationMs)),
-  }
-}
-
 function getTimelineClipStyle(layer: StudioLayer, patchDurationMs: number): CSSProperties {
   const safePatchDurationMs = Math.max(patchDurationMs, 1)
   const clipStartMs = Math.min(Math.max(layer.startMs, 0), safePatchDurationMs)
@@ -449,10 +433,6 @@ function getStoredStudioLayout() {
   }
 }
 
-function createLayerId() {
-  return `layer-${Math.random().toString(36).slice(2, 8)}`
-}
-
 function isKeyboardShortcutTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
@@ -490,6 +470,10 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
       <path d={path} />
     </svg>
   )
+}
+
+function createAssistantMessageId() {
+  return `assistant-${Math.random().toString(36).slice(2, 10)}`
 }
 
 export type StudioPageProps = {
@@ -538,6 +522,22 @@ function StudioPage({
   const [rightPanelWidth, setRightPanelWidth] = useState(
     initialLayout?.rightPanelWidth ?? DEFAULT_RIGHT_PANEL_WIDTH,
   )
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false)
+  const [isAssistantRunning, setIsAssistantRunning] = useState(false)
+  const [assistantPrompt, setAssistantPrompt] = useState('')
+  const [assistantError, setAssistantError] = useState<string | null>(null)
+  const [assistantMessages, setAssistantMessages] = useState<AssistantChatMessage[]>(() => [
+    {
+      id: createAssistantMessageId(),
+      role: 'assistant',
+      content:
+        'Describe the sound you want. I can modify layers, envelopes, filters, timing, master settings, or build a new patch from scratch.',
+    },
+  ])
+  const [assistantUndoState, setAssistantUndoState] = useState<{
+    patch: StudioPatch
+    selectedLayerId: string
+  } | null>(null)
   const previewTimerRef = useRef<number | null>(null)
   const playbackTokenRef = useRef(0)
   const patchRef = useRef(patch)
@@ -1316,6 +1316,98 @@ function StudioPage({
     })
   }
 
+  async function handleAssistantSubmit(promptOverride?: string) {
+    const nextPrompt = (promptOverride ?? assistantPrompt).trim()
+
+    if (!nextPrompt || isAssistantRunning) {
+      return
+    }
+
+    const userMessage: AssistantChatMessage = {
+      id: createAssistantMessageId(),
+      role: 'user',
+      content: nextPrompt,
+    }
+    const history = [...assistantMessages, userMessage]
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .slice(-10)
+      .map(({ role, content }) => ({ role, content }))
+
+    setIsAssistantOpen(true)
+    setIsAssistantRunning(true)
+    setAssistantError(null)
+    setAssistantPrompt('')
+    setAssistantMessages((current) => [...current, userMessage])
+
+    try {
+      const response = await requestStudioAssistant({
+        prompt: nextPrompt,
+        history,
+        studio: buildStudioAssistantContext(patchRef.current, activeLayerId),
+      })
+      const reply = response.reply.trim() || 'Applied your sound changes.'
+
+      if (response.operations.length > 0) {
+        const previousPatch = cloneStudioPatch(patchRef.current)
+        const previousSelectedLayerId = activeLayerId
+        const applied = applyAssistantOperations(patchRef.current, activeLayerId, response.operations)
+
+        if (applied.didChange) {
+          setAssistantUndoState({
+            patch: previousPatch,
+            selectedLayerId: previousSelectedLayerId,
+          })
+          setSelectedLayerId(applied.selectedLayerId)
+          commitPatch(applied.patch, { status: reply })
+          void playPatch(applied.patch, reply)
+        } else {
+          setStatus(reply)
+        }
+      } else {
+        setStatus(reply)
+      }
+
+      setAssistantMessages((current) => [
+        ...current,
+        {
+          id: createAssistantMessageId(),
+          role: 'assistant',
+          content: reply,
+        },
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI assistant request failed.'
+
+      setAssistantError(message)
+      setStatus(message)
+    } finally {
+      setIsAssistantRunning(false)
+    }
+  }
+
+  function handleAssistantUndo() {
+    if (!assistantUndoState || isAssistantRunning) {
+      return
+    }
+
+    const restoredPatch = cloneStudioPatch(assistantUndoState.patch)
+    const undoStatus = 'Restored patch before the last AI change.'
+
+    setAssistantError(null)
+    setSelectedLayerId(assistantUndoState.selectedLayerId)
+    commitPatch(restoredPatch, { status: undoStatus })
+    void playPatch(restoredPatch, undoStatus)
+    setAssistantMessages((current) => [
+      ...current,
+      {
+        id: createAssistantMessageId(),
+        role: 'assistant',
+        content: 'Undid the last AI patch update.',
+      },
+    ])
+    setAssistantUndoState(null)
+  }
+
   return (
     <main className="studio-page-shell">
       <section className="studio-topbar">
@@ -1987,6 +2079,25 @@ function StudioPage({
           <span>{livePreview ? 'Live preview on' : 'Preview on demand'}</span>
         </div>
       </section>
+
+      <StudioAssistantPanel
+        isOpen={isAssistantOpen}
+        isPending={isAssistantRunning}
+        error={assistantError}
+        inputValue={assistantPrompt}
+        messages={assistantMessages}
+        currentPatchName={patch.name}
+        canUndo={assistantUndoState !== null}
+        onInputChange={setAssistantPrompt}
+        onSubmit={handleAssistantSubmit}
+        onClose={() => setIsAssistantOpen(false)}
+        onUndo={handleAssistantUndo}
+      />
+      <StudioAssistantBubble
+        isOpen={isAssistantOpen}
+        isPending={isAssistantRunning}
+        onToggle={() => setIsAssistantOpen((current) => !current)}
+      />
     </main>
   )
 }

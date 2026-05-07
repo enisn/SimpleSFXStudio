@@ -400,4 +400,78 @@ describe('StudioPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)
     expect(screen.getByRole('group', { name: /layer timeline/i })).not.toHaveTextContent(/layer 3/i)
   })
+
+  it('applies AI assistant edits and can undo the last AI change', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        reply: 'Added a shimmer layer and widened the mix.',
+        operations: [
+          {
+            type: 'set_master',
+            changes: {
+              stereoWidth: 1.35,
+              delayMix: 0.18,
+            },
+          },
+          {
+            type: 'add_layer',
+            select: true,
+            layer: {
+              name: 'Shimmer',
+              waveform: 'sine',
+              gain: 0.22,
+              pan: 0.26,
+              noise: 0.04,
+              startFreq: 1400,
+              endFreq: 2200,
+              durationMs: 260,
+              envelope: {
+                attackMs: 4,
+                holdMs: 18,
+                decayMs: 180,
+                sustain: 0.12,
+                releaseMs: 130,
+              },
+              filter: {
+                type: 'highpass',
+                cutoffHz: 1900,
+                resonance: 1.1,
+                envelopeAmount: 0.3,
+              },
+            },
+          },
+        ],
+      }),
+    } as Response)
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /open ai assistant/i }))
+    await user.type(screen.getByLabelText(/describe the sound you want/i), 'Add shimmer and widen the mix.')
+    await user.click(screen.getByRole('button', { name: /apply with ai/i }))
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+      expect(transport.play).toHaveBeenCalledTimes(1)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent(/added a shimmer layer and widened the mix/i)
+    expect(screen.getByRole('group', { name: /layer timeline/i })).toHaveTextContent(/shimmer/i)
+
+    await user.click(screen.getByRole('button', { name: /undo ai/i }))
+
+    expect(screen.getByRole('status')).toHaveTextContent(/restored patch before the last ai change/i)
+    expect(screen.getByRole('group', { name: /layer timeline/i })).not.toHaveTextContent(/shimmer/i)
+  })
 })

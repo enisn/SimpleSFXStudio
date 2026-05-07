@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LandingAssistantBubble } from '../components/AIAssistant'
 import '../App.css'
 import {
   formatFrequency,
@@ -606,6 +607,8 @@ function LandingPage({
           </button>
         </div>
       </section>
+
+      <LandingAssistantBubble to={`/studio?preset=${selectedPreset.id}`} />
     </main>
   )
 }

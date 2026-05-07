@@ -147,4 +147,23 @@ describe('App', () => {
     expect(save).toHaveBeenCalledWith(expect.any(Object), 'Sparkle Tick')
     expect(screen.getByRole('status')).toHaveTextContent(/downloaded sparkle tick/i)
   })
+
+  it('routes the landing AI bubble into the studio page', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    window.history.pushState({}, '', '/')
+
+    render(<App previewTransport={transport} save={save} />)
+
+    await user.click(screen.getByRole('link', { name: /open ai assistant in studio/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /final waveform/i })).toBeInTheDocument()
+    })
+
+    expect(window.location.pathname).toBe('/studio')
+    expect(window.location.search).toMatch(/preset=/i)
+  })
 })

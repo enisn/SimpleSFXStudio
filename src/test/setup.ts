@@ -20,6 +20,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   window.localStorage.clear()
   delete document.documentElement.dataset.theme
 })
