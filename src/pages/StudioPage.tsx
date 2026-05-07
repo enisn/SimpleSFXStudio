@@ -81,6 +81,15 @@ const MIN_CENTER_WIDTH = 540
 const TIMELINE_MARKER_DIVISIONS = 8
 const TIMELINE_LAYER_WAVE_WIDTH = 720
 const TIMELINE_LAYER_WAVE_HEIGHT = 72
+const themeModeLabels: Record<ThemeMode, string> = {
+  system: 'System',
+  light: 'Light',
+  dark: 'Dark',
+}
+const sourceTypeLabels = {
+  studio: 'Studio patch',
+  simple: 'Landing preset',
+} as const
 
 type LayerNumericKey =
   | 'gain'
@@ -468,6 +477,190 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
       <path d={path} />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M8.25 6.75v10.5L17.25 12 8.25 6.75Z" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="7.5" y="7.5" width="9" height="9" rx="1.5" />
+    </svg>
+  )
+}
+
+function DiceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="5.25" y="5.25" width="13.5" height="13.5" rx="2.25" />
+      <circle cx="9" cy="9" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="15" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="15" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="9" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M12 4.5v10.5" />
+      <path d="m8.25 11.25 3.75 3.75 3.75-3.75" />
+      <path d="M5.25 18.75h13.5" />
+    </svg>
+  )
+}
+
+function WavePulseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M3.75 12h3l2.25-4.5 4.5 9 2.25-4.5h4.5" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M12 5.25v13.5" />
+      <path d="M5.25 12h13.5" />
+    </svg>
+  )
+}
+
+function DuplicateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="8.25" y="8.25" width="10.5" height="10.5" rx="1.75" />
+      <path d="M15 8.25V6.75A1.5 1.5 0 0 0 13.5 5.25H6.75a1.5 1.5 0 0 0-1.5 1.5v6.75A1.5 1.5 0 0 0 6.75 15H8.25" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4.5 6.75h15" />
+      <path d="M9 6.75V5.25A1.5 1.5 0 0 1 10.5 3.75h3A1.5 1.5 0 0 1 15 5.25v1.5" />
+      <path d="m7.5 6.75.9 11.1A1.5 1.5 0 0 0 9.9 19.5h4.2a1.5 1.5 0 0 0 1.5-1.65l.9-11.1" />
+      <path d="M10.5 10.5v5.25" />
+      <path d="M13.5 10.5v5.25" />
+    </svg>
+  )
+}
+
+function ArrowIcon({ direction }: { direction: 'up' | 'down' }) {
+  const shaft = direction === 'up' ? 'M12 18V6.75' : 'M12 6v11.25'
+  const head = direction === 'up' ? 'm7.5 10.5 4.5-4.5 4.5 4.5' : 'm7.5 13.5 4.5 4.5 4.5-4.5'
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d={shaft} />
+      <path d={head} />
+    </svg>
+  )
+}
+
+function SpeakerIcon({ muted = false }: { muted?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M5.25 10.5h3.75l4.5-4.5v12l-4.5-4.5H5.25v-3Z" />
+      {muted ? (
+        <path d="m16.5 8.25 3 3m0-3-3 3" />
+      ) : (
+        <>
+          <path d="M16.5 9.3a3.75 3.75 0 0 1 0 5.4" />
+          <path d="M18.75 6.75a7.5 7.5 0 0 1 0 10.5" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function HeadphonesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4.5 13.5a7.5 7.5 0 0 1 15 0" />
+      <path d="M6 13.5h1.5a1.5 1.5 0 0 1 1.5 1.5v2.25a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V15A1.5 1.5 0 0 1 6 13.5Z" />
+      <path d="M16.5 13.5H18a1.5 1.5 0 0 1 1.5 1.5v2.25a1.5 1.5 0 0 1-1.5 1.5h-1.5a1.5 1.5 0 0 1-1.5-1.5V15a1.5 1.5 0 0 1 1.5-1.5Z" />
+    </svg>
+  )
+}
+
+function SystemThemeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="4.5" y="5.25" width="15" height="10.5" rx="2" />
+      <path d="M9 18.75h6" />
+      <path d="M12 15.75v3" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="12" cy="12" r="3.75" />
+      <path d="M12 3.75v2.25" />
+      <path d="M12 18v2.25" />
+      <path d="M3.75 12H6" />
+      <path d="M18 12h2.25" />
+      <path d="m6.15 6.15 1.6 1.6" />
+      <path d="m16.25 16.25 1.6 1.6" />
+      <path d="m17.85 6.15-1.6 1.6" />
+      <path d="m7.75 16.25-1.6 1.6" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M15.6 4.95a7.5 7.5 0 1 0 3.45 10.65A8.25 8.25 0 0 1 15.6 4.95Z" />
+    </svg>
+  )
+}
+
+function ThemeModeIcon({ mode }: { mode: ThemeMode }) {
+  if (mode === 'light') {
+    return <SunIcon />
+  }
+
+  if (mode === 'dark') {
+    return <MoonIcon />
+  }
+
+  return <SystemThemeIcon />
+}
+
+function StudioPatchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="4.5" y="6" width="15" height="4.5" rx="1.5" />
+      <rect x="4.5" y="13.5" width="15" height="4.5" rx="1.5" />
+    </svg>
+  )
+}
+
+function PresetSparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M12 4.5v4.5" />
+      <path d="M12 15v4.5" />
+      <path d="M4.5 12H9" />
+      <path d="M15 12h4.5" />
+      <path d="m6.75 6.75 2.25 2.25" />
+      <path d="m15 15 2.25 2.25" />
+      <path d="m17.25 6.75-2.25 2.25" />
+      <path d="M9 15 6.75 17.25" />
     </svg>
   )
 }
@@ -984,7 +1177,8 @@ function StudioPage({
       setSelectedLibraryId(sourceId)
       setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
       setInspectorTab('layer')
-      commitPatch(nextPatch, { resetDirty: true, status: `Imported ${preset.name} into the studio.` })
+      commitPatch(nextPatch, { resetDirty: true })
+      void playPatch(nextPatch, `Previewing ${nextPatch.name}.`)
       return
     }
 
@@ -997,7 +1191,9 @@ function StudioPage({
     const nextPatch = cloneStudioPatch(preset)
     setSelectedLibraryId(sourceId)
     setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
-    commitPatch(nextPatch, { resetDirty: true, status: `Loaded ${preset.name}.` })
+    setInspectorTab('layer')
+    commitPatch(nextPatch, { resetDirty: true })
+    void playPatch(nextPatch, `Previewing ${nextPatch.name}.`)
   }
 
   function updatePatchName(name: string) {
@@ -1427,41 +1623,69 @@ function StudioPage({
         </div>
 
         <div className="studio-topbar__actions">
-          <button type="button" className="studio-toolbar-button" onClick={handlePlayToggle}>
-            {isPlaying ? 'Stop patch' : 'Play patch'}
+          <button
+            type="button"
+            className="studio-toolbar-button"
+            aria-label={isPlaying ? 'Stop patch' : 'Play patch'}
+            title={isPlaying ? 'Stop patch' : 'Play patch'}
+            onClick={handlePlayToggle}
+          >
+            <span className="studio-button__icon" aria-hidden="true">
+              {isPlaying ? <StopIcon /> : <PlayIcon />}
+            </span>
+            <span className="studio-button__label">{isPlaying ? 'Stop' : 'Play'}</span>
           </button>
           <button
             type="button"
             className="studio-toolbar-button"
+            aria-label="Randomize layer"
+            title="Randomize layer"
             onClick={handleRandomizeSelectedLayer}
           >
-            Randomize layer
+            <span className="studio-button__icon" aria-hidden="true">
+              <DiceIcon />
+            </span>
+            <span className="studio-button__label">Randomize</span>
           </button>
           <button
             type="button"
             className="studio-toolbar-button studio-toolbar-button--accent"
+            aria-label="Export stereo WAV"
+            title="Export stereo WAV"
             onClick={handleExport}
           >
-            Export stereo WAV
+            <span className="studio-button__icon" aria-hidden="true">
+              <DownloadIcon />
+            </span>
+            <span className="studio-button__label">Export WAV</span>
           </button>
           <button
             type="button"
             className={`studio-toggle ${livePreview ? 'is-active' : ''}`}
             aria-pressed={livePreview}
+            aria-label="Live preview"
+            title="Live preview"
             onClick={() => setLivePreview((current) => !current)}
           >
-            Live preview
+            <span className="studio-button__icon" aria-hidden="true">
+              <WavePulseIcon />
+            </span>
+            <span className="studio-button__label">Live preview</span>
           </button>
           <div className="studio-theme-buttons" role="group" aria-label="Theme mode">
             {THEME_MODES.map((mode) => (
               <button
                 key={mode}
                 type="button"
-                className={`studio-theme-button ${themeMode === mode ? 'is-active' : ''}`}
+                className={`studio-theme-button studio-button--icon-only studio-theme-button--icon-only ${themeMode === mode ? 'is-active' : ''}`}
                 aria-pressed={themeMode === mode}
+                aria-label={themeModeLabels[mode]}
+                title={`${themeModeLabels[mode]} theme`}
                 onClick={() => setThemeMode(mode)}
               >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                <span className="studio-button__icon" aria-hidden="true">
+                  <ThemeModeIcon mode={mode} />
+                </span>
               </button>
             ))}
           </div>
@@ -1521,7 +1745,12 @@ function StudioPage({
                         aria-pressed={isActive}
                         onClick={() => handlePatchSourceSelect(source.id, source.source)}
                       >
-                        <span>{source.source === 'studio' ? 'Studio patch' : 'Landing preset'}</span>
+                        <span className="studio-source-card__eyebrow">
+                          <span className="studio-source-card__icon" aria-hidden="true">
+                            {source.source === 'studio' ? <StudioPatchIcon /> : <PresetSparkIcon />}
+                          </span>
+                          <span>{sourceTypeLabels[source.source]}</span>
+                        </span>
                         <strong>{source.name}</strong>
                         <small>{source.description}</small>
                       </button>
@@ -1593,18 +1822,41 @@ function StudioPage({
                   {patch.layers.length} layers. Drag clips to move them. Drag the edge to resize.
                 </p>
                 <div className="studio-panel-actions">
-                  <button type="button" className="studio-toolbar-button" onClick={handleAddLayer}>
-                    Add layer
-                  </button>
-                  <button type="button" className="studio-toolbar-button" onClick={handleDuplicateLayer}>
-                    Duplicate
+                  <button
+                    type="button"
+                    className="studio-toolbar-button"
+                    aria-label="Add layer"
+                    title="Add layer"
+                    onClick={handleAddLayer}
+                  >
+                    <span className="studio-button__icon" aria-hidden="true">
+                      <PlusIcon />
+                    </span>
+                    <span className="studio-button__label">Add</span>
                   </button>
                   <button
                     type="button"
                     className="studio-toolbar-button"
+                    aria-label="Duplicate layer"
+                    title="Duplicate layer"
+                    onClick={handleDuplicateLayer}
+                  >
+                    <span className="studio-button__icon" aria-hidden="true">
+                      <DuplicateIcon />
+                    </span>
+                    <span className="studio-button__label">Duplicate</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-toolbar-button"
+                    aria-label="Delete"
+                    title="Delete layer"
                     onClick={() => handleRemoveLayer()}
                   >
-                    Delete
+                    <span className="studio-button__icon" aria-hidden="true">
+                      <TrashIcon />
+                    </span>
+                    <span className="studio-button__label">Delete</span>
                   </button>
                 </div>
               </div>
@@ -1676,19 +1928,27 @@ function StudioPage({
                       <div className="studio-timeline-track-head__actions">
                         <button
                           type="button"
+                          className="studio-button--icon-only"
                           aria-pressed={!layer.enabled}
                           aria-label={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
+                          title={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
                           onClick={() => toggleLayerEnabled(layer.id)}
                         >
-                          {layer.enabled ? 'M' : 'On'}
+                          <span className="studio-button__icon" aria-hidden="true">
+                            <SpeakerIcon muted={!layer.enabled} />
+                          </span>
                         </button>
                         <button
                           type="button"
+                          className="studio-button--icon-only"
                           aria-pressed={layer.solo}
                           aria-label={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
+                          title={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
                           onClick={() => toggleLayerSolo(layer.id)}
                         >
-                          {layer.solo ? 'S' : 'Solo'}
+                          <span className="studio-button__icon" aria-hidden="true">
+                            <HeadphonesIcon />
+                          </span>
                         </button>
                       </div>
                     </div>,
@@ -1774,11 +2034,27 @@ function StudioPage({
                 <span className="studio-pane__scope">{inspectorScopeLabel}</span>
                 {!isMasterInspectorTab && selectedLayer ? (
                   <div className="studio-reorder-actions">
-                    <button type="button" onClick={() => handleMoveLayer(-1)}>
-                      Up
+                    <button
+                      type="button"
+                      className="studio-button--icon-only"
+                      aria-label="Up"
+                      title="Move layer up"
+                      onClick={() => handleMoveLayer(-1)}
+                    >
+                      <span className="studio-button__icon" aria-hidden="true">
+                        <ArrowIcon direction="up" />
+                      </span>
                     </button>
-                    <button type="button" onClick={() => handleMoveLayer(1)}>
-                      Down
+                    <button
+                      type="button"
+                      className="studio-button--icon-only"
+                      aria-label="Down"
+                      title="Move layer down"
+                      onClick={() => handleMoveLayer(1)}
+                    >
+                      <span className="studio-button__icon" aria-hidden="true">
+                        <ArrowIcon direction="down" />
+                      </span>
                     </button>
                   </div>
                 ) : null}

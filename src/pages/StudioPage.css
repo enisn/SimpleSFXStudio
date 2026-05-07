@@ -191,6 +191,45 @@
   text-decoration: none;
 }
 
+.studio-toolbar-button,
+.studio-toggle,
+.studio-theme-button,
+.studio-layer-card__actions button,
+.studio-reorder-actions button,
+.studio-timeline-track-head__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.studio-button__icon,
+.studio-source-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.studio-button__icon svg,
+.studio-source-card__icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.studio-button__label {
+  white-space: nowrap;
+}
+
+.studio-button--icon-only {
+  padding: 10px;
+}
+
+.studio-theme-button--icon-only {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .studio-link--ghost,
 .studio-theme-button,
 .studio-tab,
@@ -590,6 +629,12 @@
   color: var(--ink);
 }
 
+.studio-source-card__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .studio-layer-card {
   display: grid;
   gap: 10px;
@@ -616,6 +661,11 @@
 .studio-layer-card__actions button,
 .studio-reorder-actions button {
   padding: 8px 10px;
+}
+
+.studio-reorder-actions .studio-button--icon-only {
+  min-width: 34px;
+  padding-inline: 8px;
 }
 
 .studio-layer-card__actions button {
@@ -876,6 +926,11 @@
   border-radius: 10px;
   font-size: 0.8rem;
   line-height: 1;
+}
+
+.studio-timeline-track-head__actions .studio-button--icon-only {
+  min-width: 34px;
+  padding-inline: 8px;
 }
 
 .studio-timeline-track-head__actions button[aria-pressed='true'] {

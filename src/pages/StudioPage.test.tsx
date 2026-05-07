@@ -329,6 +329,32 @@ describe('StudioPage', () => {
     expect(screen.queryByRole('button', { name: /^up$/i })).not.toBeInTheDocument()
   })
 
+  it('previews the selected patch browser source when clicked', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const sourceCards = within(screen.getByLabelText(/studio patch browser/i)).getAllByRole('button')
+
+    expect(sourceCards.length).toBeGreaterThan(1)
+
+    await user.click(sourceCards[1])
+
+    await waitFor(() => {
+      expect(transport.play).toHaveBeenCalledTimes(1)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent(/previewing/i)
+  })
+
   it('warns before loading a browser preset when the patch was modified', async () => {
     const { transport } = createPreviewHarness()
     const save = vi.fn()
