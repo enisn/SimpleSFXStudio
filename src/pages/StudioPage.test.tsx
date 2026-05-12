@@ -301,6 +301,66 @@ describe('StudioPage', () => {
     expect(screen.getByRole('heading', { name: /final mix/i })).toBeInTheDocument()
   })
 
+  it('resizes the mix and timeline panels vertically', async () => {
+    const { transport } = createPreviewHarness()
+    const save = vi.fn()
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/studio']}>
+        <Routes>
+          <Route path="/studio" element={<StudioPage previewTransport={transport} save={save} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const workspace = container.querySelector('.studio-workspace') as HTMLElement | null
+    const centerPane = container.querySelector('.studio-pane--center') as HTMLElement | null
+
+    expect(workspace).not.toBeNull()
+    expect(centerPane).not.toBeNull()
+
+    if (!workspace || !centerPane) {
+      throw new Error('Studio workspace is missing.')
+    }
+
+    Object.defineProperty(centerPane, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        width: 760,
+        height: 720,
+        top: 0,
+        right: 760,
+        bottom: 720,
+        left: 0,
+        x: 0,
+        y: 0,
+        toJSON() {
+          return {}
+        },
+      }),
+    })
+
+    const initialHeight = Number.parseFloat(workspace.style.getPropertyValue('--studio-mix-height'))
+
+    fireEvent.pointerDown(screen.getByRole('separator', { name: /resize mix and timeline panels/i }), {
+      clientY: 240,
+    })
+
+    expect(document.body.dataset.resizing).toBe('center')
+
+    fireEvent.pointerMove(window, { clientY: 300 })
+
+    await waitFor(() => {
+      expect(Number.parseFloat(workspace.style.getPropertyValue('--studio-mix-height'))).toBe(
+        initialHeight + 60,
+      )
+    })
+
+    fireEvent.pointerUp(window)
+
+    expect(document.body.dataset.resizing).toBeUndefined()
+  })
+
   it('clarifies whether the inspector is editing a layer or the patch output', async () => {
     const { transport } = createPreviewHarness()
     const save = vi.fn()

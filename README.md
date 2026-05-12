@@ -60,6 +60,8 @@ OPENAI_API_KEY=your-secret-key
 OPENAI_MODEL=gpt-5-mini
 ```
 
+`OPENAI_MODEL` must support Chat Completions tool calling.
+
 ### Build for production
 
 ```bash

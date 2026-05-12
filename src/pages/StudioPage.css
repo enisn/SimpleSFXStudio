@@ -375,9 +375,12 @@
 }
 
 .studio-pane--center {
-  gap: 12px;
+  gap: 0;
   padding: 12px;
-  grid-template-rows: minmax(260px, 0.92fr) minmax(0, 1.08fr);
+  grid-template-rows:
+    minmax(180px, min(var(--studio-mix-height, 320px), calc(100% - 192px)))
+    12px
+    minmax(180px, 1fr);
 }
 
 .studio-pane__content {
@@ -787,7 +790,7 @@
 .studio-wave {
   width: 100%;
   height: 100%;
-  min-height: 320px;
+  min-height: 160px;
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(5, 10, 15, 0.98), rgba(11, 19, 29, 0.96)),
@@ -811,7 +814,7 @@
 .studio-timeline-card {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   overflow: hidden;
 }
@@ -962,6 +965,7 @@
 .studio-timeline-add-row {
   display: flex;
   justify-content: center;
+  padding: 4px 0 2px;
 }
 
 .studio-timeline-add-row .studio-toolbar-button {
@@ -1192,6 +1196,30 @@
   background: linear-gradient(180deg, rgba(15, 118, 110, 0.4), rgba(56, 189, 248, 0.28));
 }
 
+.studio-center-resizer {
+  position: relative;
+  min-height: 12px;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.studio-center-resizer::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 50%;
+  height: 4px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.4), rgba(56, 189, 248, 0.28));
+}
+
+.studio-center-resizer:hover::before,
+.studio-center-resizer:focus-visible::before {
+  background: linear-gradient(90deg, var(--accent), rgba(56, 189, 248, 0.62));
+}
+
 .studio-statusbar {
   justify-content: space-between;
   padding: 12px 16px;
@@ -1262,6 +1290,11 @@ body[data-resizing='right'] {
   user-select: none;
 }
 
+body[data-resizing='center'] {
+  cursor: row-resize;
+  user-select: none;
+}
+
 body[data-timeline-drag='move'] {
   cursor: grabbing;
   user-select: none;
@@ -1275,6 +1308,10 @@ body[data-timeline-drag='resize-end'] {
 body[data-resizing='left'] *,
 body[data-resizing='right'] * {
   cursor: col-resize !important;
+}
+
+body[data-resizing='center'] * {
+  cursor: row-resize !important;
 }
 
 body[data-timeline-drag='move'] * {
@@ -1368,7 +1405,10 @@ body[data-timeline-drag='resize-end'] * {
 
   .studio-pane--center {
     grid-row: 1;
-    grid-template-rows: minmax(220px, 0.92fr) minmax(0, 1.08fr);
+    grid-template-rows:
+      minmax(180px, min(var(--studio-mix-height, 260px), calc(100% - 112px)))
+      12px
+      minmax(100px, 1fr);
   }
 
   .studio-pane--left {

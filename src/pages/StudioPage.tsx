@@ -74,10 +74,15 @@ const releasePreviewKeys = new Set([
 const STUDIO_LAYOUT_STORAGE_KEY = 'soundmaker-studio-layout'
 const DEFAULT_LEFT_PANEL_WIDTH = 320
 const DEFAULT_RIGHT_PANEL_WIDTH = 380
+const DEFAULT_MIX_PANEL_HEIGHT = 320
 const PANEL_RAIL_WIDTH = 56
 const MIN_SIDEBAR_WIDTH = 260
 const MAX_SIDEBAR_WIDTH = 460
 const MIN_CENTER_WIDTH = 540
+const MIN_MIX_PANEL_HEIGHT = 180
+const MIN_TIMELINE_PANEL_HEIGHT = 180
+const MAX_MIX_PANEL_HEIGHT = 900
+const CENTER_RESIZER_HEIGHT = 12
 const TIMELINE_MARKER_DIVISIONS = 8
 const TIMELINE_LAYER_WAVE_WIDTH = 720
 const TIMELINE_LAYER_WAVE_HEIGHT = 72
@@ -109,7 +114,7 @@ type FilterNumericKey = Exclude<keyof StudioLayer['filter'], 'type'>
 type MasterNumericKey = keyof StudioMasterSettings
 type InspectorPanel = 'layer' | 'master'
 type LayerInspectorTab = 'filter' | 'envelope' | 'layer'
-type ResizePane = 'left' | 'right'
+type ResizePane = 'left' | 'right' | 'center'
 type TimelineDragMode = 'move' | 'resize-end'
 
 type SliderConfig<Key extends string> = {
@@ -124,7 +129,9 @@ type SliderConfig<Key extends string> = {
 type ResizeState = {
   pane: ResizePane
   startX: number
+  startY: number
   startWidth: number
+  startHeight: number
 }
 
 type TimelineDragState = {
@@ -141,6 +148,7 @@ type WorkspaceStyle = CSSProperties & {
   '--studio-left-resizer-width': string
   '--studio-right-width': string
   '--studio-right-resizer-width': string
+  '--studio-mix-height': string
 }
 
 const INSPECTOR_PANEL_ITEMS: Array<{ id: InspectorPanel; label: string; railLabel: string }> = [
@@ -421,6 +429,7 @@ function getStoredStudioLayout() {
     const parsed = JSON.parse(stored) as {
       leftPanelWidth?: number
       rightPanelWidth?: number
+      mixPanelHeight?: number
       isLeftPanelOpen?: boolean
       isRightPanelOpen?: boolean
     }
@@ -435,6 +444,11 @@ function getStoredStudioLayout() {
         parsed.rightPanelWidth ?? DEFAULT_RIGHT_PANEL_WIDTH,
         MIN_SIDEBAR_WIDTH,
         MAX_SIDEBAR_WIDTH,
+      ),
+      mixPanelHeight: clampPanelWidth(
+        parsed.mixPanelHeight ?? DEFAULT_MIX_PANEL_HEIGHT,
+        MIN_MIX_PANEL_HEIGHT,
+        MAX_MIX_PANEL_HEIGHT,
       ),
       isLeftPanelOpen: parsed.isLeftPanelOpen ?? true,
       isRightPanelOpen: parsed.isRightPanelOpen ?? true,
@@ -718,6 +732,9 @@ function StudioPage({
   const [rightPanelWidth, setRightPanelWidth] = useState(
     initialLayout?.rightPanelWidth ?? DEFAULT_RIGHT_PANEL_WIDTH,
   )
+  const [mixPanelHeight, setMixPanelHeight] = useState(
+    initialLayout?.mixPanelHeight ?? DEFAULT_MIX_PANEL_HEIGHT,
+  )
   const [isAssistantOpen, setIsAssistantOpen] = useState(false)
   const [isAssistantRunning, setIsAssistantRunning] = useState(false)
   const [assistantPrompt, setAssistantPrompt] = useState('')
@@ -736,8 +753,9 @@ function StudioPage({
   const previewTimerRef = useRef<number | null>(null)
   const playbackTokenRef = useRef(0)
   const patchRef = useRef(patch)
-  const panelWidthsRef = useRef({ left: leftPanelWidth, right: rightPanelWidth })
+  const layoutSizeRef = useRef({ left: leftPanelWidth, right: rightPanelWidth, mix: mixPanelHeight })
   const resizeStateRef = useRef<ResizeState | null>(null)
+  const centerPaneRef = useRef<HTMLElement | null>(null)
   const timelineMeasureRef = useRef<HTMLDivElement | null>(null)
   const timelineDragStateRef = useRef<TimelineDragState | null>(null)
 
@@ -824,8 +842,9 @@ function StudioPage({
       '--studio-left-resizer-width': isLeftPanelOpen ? '12px' : '0px',
       '--studio-right-width': `${isRightPanelOpen ? rightPanelWidth : PANEL_RAIL_WIDTH}px`,
       '--studio-right-resizer-width': isRightPanelOpen ? '12px' : '0px',
+      '--studio-mix-height': `${mixPanelHeight}px`,
     }),
-    [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, rightPanelWidth],
+    [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, mixPanelHeight, rightPanelWidth],
   )
 
   useEffect(() => {
@@ -834,12 +853,18 @@ function StudioPage({
   }, [patch])
 
   useEffect(() => {
-    panelWidthsRef.current = { left: leftPanelWidth, right: rightPanelWidth }
+    layoutSizeRef.current = { left: leftPanelWidth, right: rightPanelWidth, mix: mixPanelHeight }
     window.localStorage.setItem(
       STUDIO_LAYOUT_STORAGE_KEY,
-      JSON.stringify({ leftPanelWidth, rightPanelWidth, isLeftPanelOpen, isRightPanelOpen }),
+      JSON.stringify({
+        leftPanelWidth,
+        rightPanelWidth,
+        mixPanelHeight,
+        isLeftPanelOpen,
+        isRightPanelOpen,
+      }),
     )
-  }, [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, rightPanelWidth])
+  }, [isLeftPanelOpen, isRightPanelOpen, leftPanelWidth, mixPanelHeight, rightPanelWidth])
 
   useEffect(() => {
     document.body.dataset.studio = 'true'
@@ -890,13 +915,13 @@ function StudioPage({
         return
       }
 
-      const widths = panelWidthsRef.current
+      const sizes = layoutSizeRef.current
       const availableSpace = window.innerWidth - MIN_CENTER_WIDTH - 96
 
       if (resizeState.pane === 'left') {
         const maxWidth = Math.max(
           MIN_SIDEBAR_WIDTH,
-          Math.min(MAX_SIDEBAR_WIDTH, availableSpace - widths.right),
+          Math.min(MAX_SIDEBAR_WIDTH, availableSpace - sizes.right),
         )
         setLeftPanelWidth(
           clampPanelWidth(
@@ -908,9 +933,30 @@ function StudioPage({
         return
       }
 
+      if (resizeState.pane === 'center') {
+        const centerBounds = centerPaneRef.current?.getBoundingClientRect()
+        const availableHeight = centerBounds?.height ?? 720
+        const maxHeight = Math.min(
+          MAX_MIX_PANEL_HEIGHT,
+          Math.max(
+            MIN_MIX_PANEL_HEIGHT,
+            availableHeight - MIN_TIMELINE_PANEL_HEIGHT - CENTER_RESIZER_HEIGHT - 24,
+          ),
+        )
+
+        setMixPanelHeight(
+          clampPanelWidth(
+            resizeState.startHeight + (event.clientY - resizeState.startY),
+            MIN_MIX_PANEL_HEIGHT,
+            maxHeight,
+          ),
+        )
+        return
+      }
+
       const maxWidth = Math.max(
         MIN_SIDEBAR_WIDTH,
-        Math.min(MAX_SIDEBAR_WIDTH, availableSpace - widths.left),
+        Math.min(MAX_SIDEBAR_WIDTH, availableSpace - sizes.left),
       )
       setRightPanelWidth(
         clampPanelWidth(
@@ -1103,10 +1149,13 @@ function StudioPage({
   const beginResize = useCallback(
     (pane: ResizePane) => (event: ReactPointerEvent<HTMLDivElement>) => {
       event.preventDefault()
+      const sizes = layoutSizeRef.current
       resizeStateRef.current = {
         pane,
         startX: event.clientX,
-        startWidth: pane === 'left' ? panelWidthsRef.current.left : panelWidthsRef.current.right,
+        startY: event.clientY,
+        startWidth: pane === 'left' ? sizes.left : sizes.right,
+        startHeight: sizes.mix,
       }
       document.body.dataset.resizing = pane
     },
@@ -1791,7 +1840,7 @@ function StudioPage({
           />
         ) : null}
 
-        <section className="studio-pane studio-pane--center">
+        <section className="studio-pane studio-pane--center" ref={centerPaneRef}>
           <div className="studio-wave-card">
             <div className="studio-panel-head">
               <div>
@@ -1829,6 +1878,15 @@ function StudioPage({
               <span>{livePreview ? 'Live preview' : 'Release to preview'}</span>
             </div>
           </div>
+
+          <div
+            className="studio-center-resizer"
+            role="separator"
+            aria-label="Resize mix and timeline panels"
+            aria-orientation="horizontal"
+            data-tooltip="Resize mix and timeline panels"
+            onPointerDown={beginResize('center')}
+          />
 
           <section className="studio-timeline-card">
             <div className="studio-panel-head">
@@ -2007,21 +2065,21 @@ function StudioPage({
                   ]
                 })}
               </div>
-            </div>
 
-            <div className="studio-timeline-add-row">
-              <button
-                type="button"
-                className="studio-toolbar-button"
-                aria-label="Add layer"
-                data-tooltip="Add layer"
-                onClick={handleAddLayer}
-              >
-                <span className="studio-button__icon" aria-hidden="true">
-                  <PlusIcon />
-                </span>
-                <span className="studio-button__label">Add layer</span>
-              </button>
+              <div className="studio-timeline-add-row">
+                <button
+                  type="button"
+                  className="studio-toolbar-button"
+                  aria-label="Add layer"
+                  data-tooltip="Add layer"
+                  onClick={handleAddLayer}
+                >
+                  <span className="studio-button__icon" aria-hidden="true">
+                    <PlusIcon />
+                  </span>
+                  <span className="studio-button__label">Add layer</span>
+                </button>
+              </div>
             </div>
           </section>
         </section>
