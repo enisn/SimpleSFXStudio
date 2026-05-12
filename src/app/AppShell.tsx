@@ -3,6 +3,7 @@ import type { SoundParams } from '../audio/types'
 import type { PreviewTransport } from '../audio/runtime'
 import type { StudioPatch } from '../audio/studio/types'
 import type { StudioPreviewTransport } from '../audio/studio/runtime'
+import TooltipLayer from '../components/TooltipLayer'
 import LandingPage from '../pages/LandingPage'
 import StudioPage from '../pages/StudioPage'
 
@@ -29,6 +30,7 @@ function AppShell({
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <TooltipLayer />
     </BrowserRouter>
   )
 }

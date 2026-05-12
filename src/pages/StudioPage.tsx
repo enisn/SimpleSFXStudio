@@ -107,7 +107,8 @@ type LayerNumericKey =
 type EnvelopeNumericKey = keyof StudioLayer['envelope']
 type FilterNumericKey = Exclude<keyof StudioLayer['filter'], 'type'>
 type MasterNumericKey = keyof StudioMasterSettings
-type InspectorTab = 'layer' | 'envelope' | 'filter' | 'master'
+type InspectorPanel = 'layer' | 'master'
+type LayerInspectorTab = 'filter' | 'envelope' | 'layer'
 type ResizePane = 'left' | 'right'
 type TimelineDragMode = 'move' | 'resize-end'
 
@@ -142,15 +143,16 @@ type WorkspaceStyle = CSSProperties & {
   '--studio-right-resizer-width': string
 }
 
-const INSPECTOR_TAB_ITEMS: Array<{ id: InspectorTab; label: string; railLabel: string }> = [
+const INSPECTOR_PANEL_ITEMS: Array<{ id: InspectorPanel; label: string; railLabel: string }> = [
   { id: 'layer', label: 'Layer', railLabel: 'Layer' },
-  { id: 'envelope', label: 'Envelope', railLabel: 'Env' },
-  { id: 'filter', label: 'Filter', railLabel: 'Filter' },
   { id: 'master', label: 'Master', railLabel: 'Master' },
 ]
 
-const LAYER_INSPECTOR_TAB_ITEMS = INSPECTOR_TAB_ITEMS.filter((tab) => tab.id !== 'master')
-const MASTER_INSPECTOR_TAB_ITEMS = INSPECTOR_TAB_ITEMS.filter((tab) => tab.id === 'master')
+const LAYER_INSPECTOR_TAB_ITEMS: Array<{ id: LayerInspectorTab; label: string; tabLabel: string }> = [
+  { id: 'filter', label: 'Filter', tabLabel: 'Filter' },
+  { id: 'envelope', label: 'Envelope', tabLabel: 'Env' },
+  { id: 'layer', label: 'Layer', tabLabel: 'Layer' },
+]
 
 const layerControlConfigs: Array<SliderConfig<LayerNumericKey>> = [
   {
@@ -706,7 +708,8 @@ function StudioPage({
   const [livePreview, setLivePreview] = useState(false)
   const [hasPatchChanges, setHasPatchChanges] = useState(Boolean(storedDraft && !importedPreset))
   const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredThemeMode)
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('layer')
+  const [inspectorPanel, setInspectorPanel] = useState<InspectorPanel>('layer')
+  const [layerInspectorTab, setLayerInspectorTab] = useState<LayerInspectorTab>('layer')
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(initialLayout?.isLeftPanelOpen ?? true)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(initialLayout?.isRightPanelOpen ?? true)
   const [leftPanelWidth, setLeftPanelWidth] = useState(
@@ -723,8 +726,7 @@ function StudioPage({
     {
       id: createAssistantMessageId(),
       role: 'assistant',
-      content:
-        'Describe the sound you want. I can modify layers, envelopes, filters, timing, master settings, or build a new patch from scratch.',
+      content: 'Tell me the sound change and I will apply it to the current patch.',
     },
   ])
   const [assistantUndoState, setAssistantUndoState] = useState<{
@@ -743,12 +745,16 @@ function StudioPage({
     ? selectedLayerId
     : (patch.layers[0]?.id ?? 'layer-1')
   const selectedLayer = patch.layers.find((layer) => layer.id === activeLayerId) ?? patch.layers[0]
-  const isMasterInspectorTab = inspectorTab === 'master'
-  const inspectorHeaderTitle = isMasterInspectorTab ? 'Patch output' : 'Layer inspector'
-  const inspectorHeaderCopy = isMasterInspectorTab
+  const isMasterInspectorPanel = inspectorPanel === 'master'
+  const inspectorHeaderTitle = isMasterInspectorPanel ? 'Patch output' : 'Layer inspector'
+  const inspectorHeaderDescription = isMasterInspectorPanel
     ? 'Master controls shape the final mix after all layers are combined.'
     : `Selected layer: ${selectedLayer?.name ?? 'None'}. Layer, Envelope, and Filter apply only to this layer.`
-  const inspectorScopeLabel = isMasterInspectorTab ? 'Patch scope' : 'Layer scope'
+  const inspectorScopeLabel = isMasterInspectorPanel ? 'Patch scope' : 'Layer scope'
+  const showLayerInspector = useCallback((tab: LayerInspectorTab = 'layer') => {
+    setInspectorPanel('layer')
+    setLayerInspectorTab(tab)
+  }, [])
   const availableSources = useMemo(
     () => [
       ...STUDIO_PATCHES.map((preset) => ({
@@ -1119,7 +1125,7 @@ function StudioPage({
       }
 
       setSelectedLayerId(layerId)
-      setInspectorTab('layer')
+      showLayerInspector()
       timelineDragStateRef.current = {
         layerId,
         mode,
@@ -1130,7 +1136,7 @@ function StudioPage({
       }
       document.body.dataset.timelineDrag = mode
     },
-    [],
+    [showLayerInspector],
   )
 
   function commitPatch(
@@ -1176,7 +1182,7 @@ function StudioPage({
       const nextPatch = simplePresetToStudioPatch(preset)
       setSelectedLibraryId(sourceId)
       setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
-      setInspectorTab('layer')
+      showLayerInspector()
       commitPatch(nextPatch, { resetDirty: true })
       void playPatch(nextPatch, `Previewing ${nextPatch.name}.`)
       return
@@ -1191,7 +1197,7 @@ function StudioPage({
     const nextPatch = cloneStudioPatch(preset)
     setSelectedLibraryId(sourceId)
     setSelectedLayerId(nextPatch.layers[0]?.id ?? 'layer-1')
-    setInspectorTab('layer')
+    showLayerInspector()
     commitPatch(nextPatch, { resetDirty: true })
     void playPatch(nextPatch, `Previewing ${nextPatch.name}.`)
   }
@@ -1266,7 +1272,7 @@ function StudioPage({
     const nextStartMs = Math.min(Math.max(roundedValue, STUDIO_LIMITS.layerStartMs.min), maxStartMs)
 
     setSelectedLayerId(layerId)
-    setInspectorTab('layer')
+    showLayerInspector()
     updateLayerById(layerId, (currentLayer) => ({ ...currentLayer, startMs: nextStartMs }), {
       preview: true,
     })
@@ -1333,28 +1339,34 @@ function StudioPage({
     const nextPatch = { ...patchRef.current, layers: [...patchRef.current.layers, nextLayer] }
 
     setSelectedLayerId(nextLayer.id)
-    setInspectorTab('layer')
+    showLayerInspector()
     commitPatch(nextPatch, { status: `Added ${nextLayer.name}.` })
   }
 
-  function handleDuplicateLayer() {
-    if (!selectedLayer) {
+  function handleDuplicateLayer(layerId = activeLayerId) {
+    const sourceLayer = patchRef.current.layers.find((layer) => layer.id === layerId)
+
+    if (!sourceLayer) {
       return
     }
 
-    const duplicate = createStudioLayer(createLayerId(), `${selectedLayer.name} Copy`, {
-      ...selectedLayer,
-      id: createLayerId(),
-      name: `${selectedLayer.name} Copy`,
-      pan: Math.max(-1, Math.min(1, selectedLayer.pan * -1 || 0.18)),
-      detuneCents: selectedLayer.detuneCents + 12,
-      startMs: selectedLayer.startMs + 12,
+    const sourceIndex = patchRef.current.layers.findIndex((layer) => layer.id === layerId)
+    const duplicateId = createLayerId()
+    const duplicate = createStudioLayer(duplicateId, `${sourceLayer.name} Copy`, {
+      ...sourceLayer,
+      id: duplicateId,
+      name: `${sourceLayer.name} Copy`,
+      pan: Math.max(-1, Math.min(1, sourceLayer.pan * -1 || 0.18)),
+      detuneCents: sourceLayer.detuneCents + 12,
+      startMs: sourceLayer.startMs + 12,
     })
-    const nextPatch = { ...patchRef.current, layers: [...patchRef.current.layers, duplicate] }
+    const nextLayers = [...patchRef.current.layers]
+
+    nextLayers.splice(sourceIndex + 1, 0, duplicate)
 
     setSelectedLayerId(duplicate.id)
-    setInspectorTab('layer')
-    commitPatch(nextPatch, { status: `Duplicated ${selectedLayer.name}.` })
+    showLayerInspector()
+    commitPatch({ ...patchRef.current, layers: nextLayers }, { status: `Duplicated ${sourceLayer.name}.` })
   }
 
   function handleRemoveLayer(layerId = activeLayerId) {
@@ -1435,7 +1447,7 @@ function StudioPage({
         setPatch(normalizedPatch)
         setHasPatchChanges(true)
         setSelectedLayerId(duplicate.id)
-        setInspectorTab('layer')
+        showLayerInspector()
         setStatus(`Duplicated ${selectedLayer.name}.`)
       }
     }
@@ -1445,7 +1457,7 @@ function StudioPage({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedLayer])
+  }, [selectedLayer, showLayerInspector])
 
   function handleMoveLayer(direction: -1 | 1) {
     if (!selectedLayer) {
@@ -1627,7 +1639,8 @@ function StudioPage({
             type="button"
             className="studio-toolbar-button"
             aria-label={isPlaying ? 'Stop patch' : 'Play patch'}
-            title={isPlaying ? 'Stop patch' : 'Play patch'}
+            data-tooltip={isPlaying ? 'Stop patch' : 'Play patch'}
+            data-tooltip-position="bottom"
             onClick={handlePlayToggle}
           >
             <span className="studio-button__icon" aria-hidden="true">
@@ -1639,7 +1652,8 @@ function StudioPage({
             type="button"
             className="studio-toolbar-button"
             aria-label="Randomize layer"
-            title="Randomize layer"
+            data-tooltip="Randomize layer"
+            data-tooltip-position="bottom"
             onClick={handleRandomizeSelectedLayer}
           >
             <span className="studio-button__icon" aria-hidden="true">
@@ -1651,7 +1665,8 @@ function StudioPage({
             type="button"
             className="studio-toolbar-button studio-toolbar-button--accent"
             aria-label="Export stereo WAV"
-            title="Export stereo WAV"
+            data-tooltip="Export stereo WAV"
+            data-tooltip-position="bottom"
             onClick={handleExport}
           >
             <span className="studio-button__icon" aria-hidden="true">
@@ -1664,7 +1679,8 @@ function StudioPage({
             className={`studio-toggle ${livePreview ? 'is-active' : ''}`}
             aria-pressed={livePreview}
             aria-label="Live preview"
-            title="Live preview"
+            data-tooltip="Live preview"
+            data-tooltip-position="bottom"
             onClick={() => setLivePreview((current) => !current)}
           >
             <span className="studio-button__icon" aria-hidden="true">
@@ -1680,7 +1696,8 @@ function StudioPage({
                 className={`studio-theme-button studio-button--icon-only studio-theme-button--icon-only ${themeMode === mode ? 'is-active' : ''}`}
                 aria-pressed={themeMode === mode}
                 aria-label={themeModeLabels[mode]}
-                title={`${themeModeLabels[mode]} theme`}
+                data-tooltip={`${themeModeLabels[mode]} theme`}
+                data-tooltip-position="bottom"
                 onClick={() => setThemeMode(mode)}
               >
                 <span className="studio-button__icon" aria-hidden="true">
@@ -1700,6 +1717,8 @@ function StudioPage({
             aria-label={`${isLeftPanelOpen ? 'Collapse' : 'Expand'} source browser`}
             aria-controls="studio-left-pane-content"
             aria-expanded={isLeftPanelOpen}
+            data-tooltip={`${isLeftPanelOpen ? 'Collapse' : 'Expand'} source browser`}
+            data-tooltip-position="bottom"
             onClick={() => setIsLeftPanelOpen((current) => !current)}
           >
             <span className="studio-pane-rail__icon">
@@ -1821,44 +1840,6 @@ function StudioPage({
                 <p className="studio-panel-copy">
                   {patch.layers.length} layers. Drag clips to move them. Drag the edge to resize.
                 </p>
-                <div className="studio-panel-actions">
-                  <button
-                    type="button"
-                    className="studio-toolbar-button"
-                    aria-label="Add layer"
-                    title="Add layer"
-                    onClick={handleAddLayer}
-                  >
-                    <span className="studio-button__icon" aria-hidden="true">
-                      <PlusIcon />
-                    </span>
-                    <span className="studio-button__label">Add</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-toolbar-button"
-                    aria-label="Duplicate layer"
-                    title="Duplicate layer"
-                    onClick={handleDuplicateLayer}
-                  >
-                    <span className="studio-button__icon" aria-hidden="true">
-                      <DuplicateIcon />
-                    </span>
-                    <span className="studio-button__label">Duplicate</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-toolbar-button"
-                    aria-label="Delete"
-                    title="Delete layer"
-                    onClick={() => handleRemoveLayer()}
-                  >
-                    <span className="studio-button__icon" aria-hidden="true">
-                      <TrashIcon />
-                    </span>
-                    <span className="studio-button__label">Delete</span>
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -1895,7 +1876,7 @@ function StudioPage({
                         aria-label={`Select ${layer.name} in timeline`}
                         onClick={() => {
                           setSelectedLayerId(layer.id)
-                          setInspectorTab('layer')
+                          showLayerInspector()
                         }}
                       >
                         <strong>{layer.name}</strong>
@@ -1915,7 +1896,7 @@ function StudioPage({
                             value={layer.startMs}
                             onFocus={() => {
                               setSelectedLayerId(layer.id)
-                              setInspectorTab('layer')
+                              showLayerInspector()
                             }}
                             onChange={(event) => updateLayerStartMs(layer.id, Number(event.currentTarget.value))}
                             onKeyUp={(event) => handleRangeCommitKey(event.key)}
@@ -1931,7 +1912,7 @@ function StudioPage({
                           className="studio-button--icon-only"
                           aria-pressed={!layer.enabled}
                           aria-label={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
-                          title={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
+                          data-tooltip={`${layer.enabled ? 'Mute' : 'Enable'} ${layer.name}`}
                           onClick={() => toggleLayerEnabled(layer.id)}
                         >
                           <span className="studio-button__icon" aria-hidden="true">
@@ -1943,11 +1924,33 @@ function StudioPage({
                           className="studio-button--icon-only"
                           aria-pressed={layer.solo}
                           aria-label={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
-                          title={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
+                          data-tooltip={`${layer.solo ? 'Release solo on' : 'Solo'} ${layer.name}`}
                           onClick={() => toggleLayerSolo(layer.id)}
                         >
                           <span className="studio-button__icon" aria-hidden="true">
                             <HeadphonesIcon />
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="studio-button--icon-only"
+                          aria-label={`Duplicate ${layer.name}`}
+                          data-tooltip={`Duplicate ${layer.name}`}
+                          onClick={() => handleDuplicateLayer(layer.id)}
+                        >
+                          <span className="studio-button__icon" aria-hidden="true">
+                            <DuplicateIcon />
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="studio-button--icon-only"
+                          aria-label={`Delete ${layer.name}`}
+                          data-tooltip={`Delete ${layer.name}`}
+                          onClick={() => handleRemoveLayer(layer.id)}
+                        >
+                          <span className="studio-button__icon" aria-hidden="true">
+                            <TrashIcon />
                           </span>
                         </button>
                       </div>
@@ -1959,7 +1962,7 @@ function StudioPage({
                         aria-label={`Timeline track for ${layer.name}`}
                         onClick={() => {
                           setSelectedLayerId(layer.id)
-                          setInspectorTab('layer')
+                          showLayerInspector()
                         }}
                       />
 
@@ -1968,7 +1971,7 @@ function StudioPage({
                         style={getTimelineClipStyle(layer, patch.durationMs)}
                         onClick={() => {
                           setSelectedLayerId(layer.id)
-                          setInspectorTab('layer')
+                          showLayerInspector()
                         }}
                         onPointerDown={beginTimelineDrag(layer.id, 'move')}
                       >
@@ -2005,6 +2008,21 @@ function StudioPage({
                 })}
               </div>
             </div>
+
+            <div className="studio-timeline-add-row">
+              <button
+                type="button"
+                className="studio-toolbar-button"
+                aria-label="Add layer"
+                data-tooltip="Add layer"
+                onClick={handleAddLayer}
+              >
+                <span className="studio-button__icon" aria-hidden="true">
+                  <PlusIcon />
+                </span>
+                <span className="studio-button__label">Add layer</span>
+              </button>
+            </div>
           </section>
         </section>
 
@@ -2027,18 +2045,25 @@ function StudioPage({
             <div className="studio-pane__header">
               <div>
                 <p className="studio-panel-kicker">Inspector</p>
-                <h2>{inspectorHeaderTitle}</h2>
-                <p className="studio-panel-copy">{inspectorHeaderCopy}</p>
+                <h2 data-tooltip={inspectorHeaderDescription}>{inspectorHeaderTitle}</h2>
               </div>
               <div className="studio-panel-head__actions">
-                <span className="studio-pane__scope">{inspectorScopeLabel}</span>
-                {!isMasterInspectorTab && selectedLayer ? (
+                <span
+                  className="studio-pane__scope"
+                  data-tooltip={inspectorHeaderDescription}
+                  data-tooltip-position="left"
+                  aria-label={`${inspectorScopeLabel}. ${inspectorHeaderDescription}`}
+                >
+                  {inspectorScopeLabel}
+                </span>
+                {!isMasterInspectorPanel && selectedLayer ? (
                   <div className="studio-reorder-actions">
                     <button
                       type="button"
                       className="studio-button--icon-only"
                       aria-label="Up"
-                      title="Move layer up"
+                      data-tooltip="Move layer up"
+                      data-tooltip-position="left"
                       onClick={() => handleMoveLayer(-1)}
                     >
                       <span className="studio-button__icon" aria-hidden="true">
@@ -2049,7 +2074,8 @@ function StudioPage({
                       type="button"
                       className="studio-button--icon-only"
                       aria-label="Down"
-                      title="Move layer down"
+                      data-tooltip="Move layer down"
+                      data-tooltip-position="left"
                       onClick={() => handleMoveLayer(1)}
                     >
                       <span className="studio-button__icon" aria-hidden="true">
@@ -2062,187 +2088,201 @@ function StudioPage({
             </div>
 
             <div className="studio-pane__body">
-            {inspectorTab === 'layer' && selectedLayer ? (
-              <section className="studio-section-card studio-section-card--fill">
-                <div className="studio-panel-head">
-                  <div>
-                    <p className="studio-panel-kicker">Layer</p>
-                    <h2>{selectedLayer.name}</h2>
+              {inspectorPanel === 'layer' && selectedLayer ? (
+                <section className="studio-section-card studio-section-card--fill studio-section-card--inspector">
+                  <div className="studio-panel-head">
+                    <div>
+                      <p className="studio-panel-kicker">Selected layer</p>
+                      <h2>{selectedLayer.name}</h2>
+                    </div>
                   </div>
-                </div>
 
-                <label className="studio-input-wrap" htmlFor="layer-name-input">
-                  <span>Layer name</span>
-                  <input
-                    id="layer-name-input"
-                    value={selectedLayer.name}
-                    onChange={(event) => handleLayerNameChange(event.currentTarget.value)}
-                  />
-                </label>
+                  <div className="studio-inner-tab-bar" role="tablist" aria-label="Layer inspector sections">
+                    {LAYER_INSPECTOR_TAB_ITEMS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        className={`studio-tab studio-inner-tab ${layerInspectorTab === tab.id ? 'is-active' : ''}`}
+                        aria-controls={`layer-inspector-${tab.id}`}
+                        aria-selected={layerInspectorTab === tab.id}
+                        onClick={() => setLayerInspectorTab(tab.id)}
+                      >
+                        {tab.tabLabel}
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="studio-option-group" role="group" aria-label="Layer waveform">
-                  {waveformOptions.map((waveform) => (
-                    <button
-                      key={waveform}
-                      type="button"
-                      className={`studio-chip ${selectedLayer.waveform === waveform ? 'is-active' : ''}`}
-                      aria-pressed={selectedLayer.waveform === waveform}
-                      onClick={() => handleWaveformChange(waveform)}
+                  {layerInspectorTab === 'layer' ? (
+                    <div
+                      id="layer-inspector-layer"
+                      className="studio-inspector-tab-panel studio-inspector-tab-panel--layer"
+                      role="tabpanel"
                     >
-                      {formatWaveformLabel(waveform)}
-                    </button>
-                  ))}
-                </div>
+                      <label className="studio-input-wrap" htmlFor="layer-name-input">
+                        <span>Layer name</span>
+                        <input
+                          id="layer-name-input"
+                          value={selectedLayer.name}
+                          onChange={(event) => handleLayerNameChange(event.currentTarget.value)}
+                        />
+                      </label>
 
-                <div className="studio-scroll-grid">
-                  {layerControlConfigs.map((control) => (
-                    <label key={control.key} className="studio-slider-card">
-                      <span>
-                        {control.label}
-                        <strong>{control.format(selectedLayer[control.key])}</strong>
-                      </span>
-                      <input
-                        type="range"
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        value={selectedLayer[control.key]}
-                        onChange={(event) => updateLayerValue(control.key, Number(event.currentTarget.value))}
-                        onPointerUp={handleRangeCommit}
-                        onKeyUp={(event) => handleRangeCommitKey(event.key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                      <div className="studio-option-group" role="group" aria-label="Layer waveform">
+                        {waveformOptions.map((waveform) => (
+                          <button
+                            key={waveform}
+                            type="button"
+                            className={`studio-chip ${selectedLayer.waveform === waveform ? 'is-active' : ''}`}
+                            aria-pressed={selectedLayer.waveform === waveform}
+                            onClick={() => handleWaveformChange(waveform)}
+                          >
+                            {formatWaveformLabel(waveform)}
+                          </button>
+                        ))}
+                      </div>
 
-            {inspectorTab === 'envelope' && selectedLayer ? (
-              <section className="studio-section-card studio-section-card--fill">
-                <div className="studio-panel-head">
-                  <div>
-                    <p className="studio-panel-kicker">Envelope</p>
-                    <h2>Amp contour</h2>
-                  </div>
-                </div>
+                      <div className="studio-scroll-grid">
+                        {layerControlConfigs.map((control) => (
+                          <label key={control.key} className="studio-slider-card">
+                            <span>
+                              {control.label}
+                              <strong>{control.format(selectedLayer[control.key])}</strong>
+                            </span>
+                            <input
+                              type="range"
+                              min={control.min}
+                              max={control.max}
+                              step={control.step}
+                              value={selectedLayer[control.key]}
+                              onChange={(event) => updateLayerValue(control.key, Number(event.currentTarget.value))}
+                              onPointerUp={handleRangeCommit}
+                              onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
-                <div className="studio-scroll-grid">
-                  {envelopeControlConfigs.map((control) => (
-                    <label key={control.key} className="studio-slider-card">
-                      <span>
-                        {control.label}
-                        <strong>{control.format(selectedLayer.envelope[control.key])}</strong>
-                      </span>
-                      <input
-                        type="range"
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        value={selectedLayer.envelope[control.key]}
-                        onChange={(event) => updateEnvelopeValue(control.key, Number(event.currentTarget.value))}
-                        onPointerUp={handleRangeCommit}
-                        onKeyUp={(event) => handleRangeCommitKey(event.key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                  {layerInspectorTab === 'envelope' ? (
+                    <div id="layer-inspector-envelope" className="studio-inspector-tab-panel" role="tabpanel">
+                      <div className="studio-scroll-grid">
+                        {envelopeControlConfigs.map((control) => (
+                          <label key={control.key} className="studio-slider-card">
+                            <span>
+                              {control.label}
+                              <strong>{control.format(selectedLayer.envelope[control.key])}</strong>
+                            </span>
+                            <input
+                              type="range"
+                              min={control.min}
+                              max={control.max}
+                              step={control.step}
+                              value={selectedLayer.envelope[control.key]}
+                              onChange={(event) => updateEnvelopeValue(control.key, Number(event.currentTarget.value))}
+                              onPointerUp={handleRangeCommit}
+                              onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
-            {inspectorTab === 'filter' && selectedLayer ? (
-              <section className="studio-section-card studio-section-card--fill">
-                <div className="studio-panel-head">
-                  <div>
-                    <p className="studio-panel-kicker">Filter</p>
-                    <h2>Tone shaping</h2>
-                  </div>
-                </div>
-
-                <div className="studio-option-group" role="group" aria-label="Layer filter type">
-                  {filterTypes.map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`studio-chip ${selectedLayer.filter.type === type ? 'is-active' : ''}`}
-                      aria-pressed={selectedLayer.filter.type === type}
-                      onClick={() => handleFilterTypeChange(type)}
+                  {layerInspectorTab === 'filter' ? (
+                    <div
+                      id="layer-inspector-filter"
+                      className="studio-inspector-tab-panel studio-inspector-tab-panel--filter"
+                      role="tabpanel"
                     >
-                      {type}
-                    </button>
-                  ))}
-                </div>
+                      <div className="studio-option-group" role="group" aria-label="Layer filter type">
+                        {filterTypes.map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            className={`studio-chip ${selectedLayer.filter.type === type ? 'is-active' : ''}`}
+                            aria-pressed={selectedLayer.filter.type === type}
+                            onClick={() => handleFilterTypeChange(type)}
+                          >
+                            {type}
+                          </button>
+                        ))}
+                      </div>
 
-                <div className="studio-scroll-grid">
-                  {filterControlConfigs.map((control) => (
-                    <label key={control.key} className="studio-slider-card">
-                      <span>
-                        {control.label}
-                        <strong>{control.format(selectedLayer.filter[control.key])}</strong>
-                      </span>
-                      <input
-                        type="range"
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        value={selectedLayer.filter[control.key]}
-                        onChange={(event) => updateFilterValue(control.key, Number(event.currentTarget.value))}
-                        onPointerUp={handleRangeCommit}
-                        onKeyUp={(event) => handleRangeCommitKey(event.key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                      <div className="studio-scroll-grid">
+                        {filterControlConfigs.map((control) => (
+                          <label key={control.key} className="studio-slider-card">
+                            <span>
+                              {control.label}
+                              <strong>{control.format(selectedLayer.filter[control.key])}</strong>
+                            </span>
+                            <input
+                              type="range"
+                              min={control.min}
+                              max={control.max}
+                              step={control.step}
+                              value={selectedLayer.filter[control.key]}
+                              onChange={(event) => updateFilterValue(control.key, Number(event.currentTarget.value))}
+                              onPointerUp={handleRangeCommit}
+                              onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
 
-            {inspectorTab === 'master' ? (
-              <section className="studio-section-card studio-section-card--fill">
-                <div className="studio-panel-head">
-                  <div>
-                    <p className="studio-panel-kicker">Master</p>
-                    <h2>Final mix</h2>
+              {inspectorPanel === 'master' ? (
+                <section className="studio-section-card studio-section-card--fill">
+                  <div className="studio-panel-head">
+                    <div>
+                      <p className="studio-panel-kicker">Master</p>
+                      <h2>Final mix</h2>
+                    </div>
                   </div>
-                </div>
 
-                <label className="studio-slider-card studio-slider-card--single">
-                  <span>
-                    Patch duration
-                    <strong>{formatMilliseconds(patch.durationMs)}</strong>
-                  </span>
-                  <input
-                    type="range"
-                    min={STUDIO_LIMITS.patchDurationMs.min}
-                    max={STUDIO_LIMITS.patchDurationMs.max}
-                    step={STUDIO_LIMITS.patchDurationMs.step}
-                    value={patch.durationMs}
-                    onChange={(event) => updatePatchDuration(Number(event.currentTarget.value))}
-                    onPointerUp={handleRangeCommit}
-                    onKeyUp={(event) => handleRangeCommitKey(event.key)}
-                  />
-                </label>
+                  <label className="studio-slider-card studio-slider-card--single">
+                    <span>
+                      Patch duration
+                      <strong>{formatMilliseconds(patch.durationMs)}</strong>
+                    </span>
+                    <input
+                      type="range"
+                      min={STUDIO_LIMITS.patchDurationMs.min}
+                      max={STUDIO_LIMITS.patchDurationMs.max}
+                      step={STUDIO_LIMITS.patchDurationMs.step}
+                      value={patch.durationMs}
+                      onChange={(event) => updatePatchDuration(Number(event.currentTarget.value))}
+                      onPointerUp={handleRangeCommit}
+                      onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                    />
+                  </label>
 
-                <div className="studio-scroll-grid">
-                  {masterControlConfigs.map((control) => (
-                    <label key={control.key} className="studio-slider-card">
-                      <span>
-                        {control.label}
-                        <strong>{control.format(patch.master[control.key])}</strong>
-                      </span>
-                      <input
-                        type="range"
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        value={patch.master[control.key]}
-                        onChange={(event) => updateMasterValue(control.key, Number(event.currentTarget.value))}
-                        onPointerUp={handleRangeCommit}
-                        onKeyUp={(event) => handleRangeCommitKey(event.key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                  <div className="studio-scroll-grid">
+                    {masterControlConfigs.map((control) => (
+                      <label key={control.key} className="studio-slider-card">
+                        <span>
+                          {control.label}
+                          <strong>{control.format(patch.master[control.key])}</strong>
+                        </span>
+                        <input
+                          type="range"
+                          min={control.min}
+                          max={control.max}
+                          step={control.step}
+                          value={patch.master[control.key]}
+                          onChange={(event) => updateMasterValue(control.key, Number(event.currentTarget.value))}
+                          onPointerUp={handleRangeCommit}
+                          onKeyUp={(event) => handleRangeCommitKey(event.key)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           </div>
 
@@ -2266,7 +2306,8 @@ function StudioPage({
               aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector panel`}
               aria-controls="studio-right-pane-content"
               aria-expanded={isRightPanelOpen}
-              title={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector panel`}
+              data-tooltip={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector panel`}
+              data-tooltip-position="left"
               onClick={(event) => {
                 event.stopPropagation()
                 setIsRightPanelOpen((current) => !current)
@@ -2278,51 +2319,26 @@ function StudioPage({
             </button>
 
             <div className="studio-pane-rail__tabs studio-pane-rail__tabs--inspector" role="tablist" aria-label="Inspector sections">
-              <div className="studio-pane-rail__group">
-                {LAYER_INSPECTOR_TAB_ITEMS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
-                    aria-controls="studio-right-pane-content"
-                    aria-label={`${tab.label} inspector`}
-                    aria-selected={inspectorTab === tab.id}
-                    title={tab.label}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setInspectorTab(tab.id)
-                      setIsRightPanelOpen(true)
-                    }}
-                  >
-                    {tab.railLabel}
-                  </button>
-                ))}
-              </div>
-
-              <span className="studio-pane-rail__divider" aria-hidden="true" />
-
-              <div className="studio-pane-rail__group">
-                {MASTER_INSPECTOR_TAB_ITEMS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    className={`studio-pane-rail-tab ${inspectorTab === tab.id ? 'is-active' : ''}`}
-                    aria-controls="studio-right-pane-content"
-                    aria-label={`${tab.label} inspector`}
-                    aria-selected={inspectorTab === tab.id}
-                    title={tab.label}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setInspectorTab(tab.id)
-                      setIsRightPanelOpen(true)
-                    }}
-                  >
-                    {tab.railLabel}
-                  </button>
-                ))}
-              </div>
+              {INSPECTOR_PANEL_ITEMS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  className={`studio-pane-rail-tab ${inspectorPanel === tab.id ? 'is-active' : ''}`}
+                  aria-controls="studio-right-pane-content"
+                  aria-label={`${tab.label} inspector`}
+                  aria-selected={inspectorPanel === tab.id}
+                  data-tooltip={tab.label}
+                  data-tooltip-position="left"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setInspectorPanel(tab.id)
+                    setIsRightPanelOpen(true)
+                  }}
+                >
+                  {tab.railLabel}
+                </button>
+              ))}
             </div>
 
             <button
@@ -2331,7 +2347,8 @@ function StudioPage({
               aria-label={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector handle`}
               aria-controls="studio-right-pane-content"
               aria-expanded={isRightPanelOpen}
-              title={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector handle`}
+              data-tooltip={`${isRightPanelOpen ? 'Collapse' : 'Expand'} inspector handle`}
+              data-tooltip-position="left"
               onClick={(event) => {
                 event.stopPropagation()
                 setIsRightPanelOpen((current) => !current)

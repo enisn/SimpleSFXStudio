@@ -47,7 +47,12 @@ function IconSend() {
 
 export function LandingAssistantBubble({ to }: { to: string }) {
   return (
-    <Link className="assistant-bubble assistant-bubble--landing" to={to} aria-label="Open AI assistant in studio">
+    <Link
+      className="assistant-bubble assistant-bubble--landing"
+      to={to}
+      aria-label="Open AI assistant in studio"
+      data-tooltip="Open AI assistant in studio"
+    >
       <span className="assistant-bubble__orb" aria-hidden="true">
         AI
       </span>
@@ -74,6 +79,7 @@ export function StudioAssistantBubble({
       className={`assistant-bubble assistant-bubble--studio ${isOpen ? 'is-open' : ''}`}
       aria-pressed={isOpen}
       aria-label={isOpen ? 'Close AI assistant' : 'Open AI assistant'}
+      data-tooltip={isOpen ? 'Close AI assistant' : 'Open AI assistant'}
       onClick={onToggle}
     >
       <span className="assistant-bubble__orb" aria-hidden="true">
@@ -101,11 +107,14 @@ type StudioAssistantPanelProps = {
 }
 
 const suggestionPrompts = [
-  'Build a polished mobile tap sound from scratch.',
-  'Make the selected layer brighter and shorter.',
-  'Add a soft stereo shimmer layer for rewards.',
-  'Turn this into a futuristic whoosh with more width.',
+  { label: 'Mobile tap', prompt: 'Build a polished mobile tap sound from scratch.' },
+  { label: 'Bright short layer', prompt: 'Make the selected layer brighter and shorter.' },
+  { label: 'Reward shimmer', prompt: 'Add a soft stereo shimmer layer for rewards.' },
+  { label: 'Wide whoosh', prompt: 'Turn this into a futuristic whoosh with more width.' },
 ]
+
+const assistantCapabilityHint =
+  'I can modify layers, envelopes, filters, timing, master settings, or build a new patch from scratch.'
 
 export function StudioAssistantPanel({
   isOpen,
@@ -132,7 +141,7 @@ export function StudioAssistantPanel({
       return
     }
 
-    element.scrollTop = element.scrollHeight
+    element.scrollTop = messages.length > 1 ? element.scrollHeight : 0
   }, [isOpen, messages])
 
   const messageCountLabel = useMemo(() => `${messages.length} messages`, [messages.length])
@@ -147,14 +156,14 @@ export function StudioAssistantPanel({
       <div className="assistant-drawer__header">
         <div className="assistant-drawer__headline">
           <p className="assistant-drawer__kicker">Patch-aware chat</p>
-          <h2>AI Assistant</h2>
+          <h2 data-tooltip={assistantCapabilityHint}>AI Assistant</h2>
         </div>
         <div className="assistant-drawer__actions">
           <button
             type="button"
             className="assistant-inline-button assistant-inline-button--icon"
             aria-label="Undo AI"
-            title="Undo AI"
+            data-tooltip="Undo AI"
             onClick={onUndo}
             disabled={!canUndo || isPending}
           >
@@ -164,7 +173,7 @@ export function StudioAssistantPanel({
             type="button"
             className="assistant-inline-button assistant-inline-button--icon"
             aria-label="Close AI assistant"
-            title="Close AI assistant"
+            data-tooltip="Close AI assistant"
             onClick={onClose}
           >
             <IconClose />
@@ -189,32 +198,46 @@ export function StudioAssistantPanel({
       </div>
 
       <div className="assistant-suggestions" aria-label="AI assistant suggestions">
-        {suggestionPrompts.map((prompt) => (
-          <button key={prompt} type="button" className="assistant-suggestion" onClick={() => onSubmit(prompt)} disabled={isPending}>
-            {prompt}
+        {suggestionPrompts.map((suggestion) => (
+          <button
+            key={suggestion.prompt}
+            type="button"
+            className="assistant-suggestion"
+            data-tooltip={suggestion.prompt}
+            onClick={() => onSubmit(suggestion.prompt)}
+            disabled={isPending}
+          >
+            {suggestion.label}
           </button>
         ))}
       </div>
 
       <form className="assistant-composer" onSubmit={handleSubmit}>
-        <label className="assistant-composer__field" htmlFor="assistant-prompt">
+        <label className="assistant-composer__field" htmlFor="assistant-prompt" data-tooltip={assistantCapabilityHint}>
           <span>Describe the sound you want</span>
+        </label>
+        <div className="assistant-composer__control">
           <textarea
             id="assistant-prompt"
-            rows={4}
-            placeholder="Example: make this punchier, shorten the tail, add a bright noise layer, and widen the stereo image."
+            rows={3}
+            placeholder="Make it punchier, shorten the tail, add a bright noise layer..."
             value={inputValue}
             onChange={(event) => onInputChange(event.currentTarget.value)}
             disabled={isPending}
           />
-        </label>
-
-        <button type="submit" className="assistant-submit" disabled={isPending || inputValue.trim().length === 0}>
-          <span className="assistant-submit__icon" aria-hidden="true">
-            <IconSend />
-          </span>
-          <span>{isPending ? 'Applying...' : 'Apply with AI'}</span>
-        </button>
+          <button
+            type="submit"
+            className="assistant-submit"
+            aria-label={isPending ? 'Applying with AI' : 'Apply with AI'}
+            data-tooltip={isPending ? 'Applying with AI' : 'Apply with AI'}
+            disabled={isPending || inputValue.trim().length === 0}
+          >
+            <span className="assistant-submit__icon" aria-hidden="true">
+              <IconSend />
+            </span>
+            <span className="assistant-submit__label">{isPending ? 'Applying...' : 'Apply with AI'}</span>
+          </button>
+        </div>
       </form>
     </section>
   )

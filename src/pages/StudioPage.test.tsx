@@ -314,19 +314,39 @@ describe('StudioPage', () => {
       </MemoryRouter>,
     )
 
+    const inspectorSections = screen.getByRole('tablist', { name: 'Inspector sections' })
+    const layerSections = screen.getByRole('tablist', { name: 'Layer inspector sections' })
+
+    expect(within(inspectorSections).getAllByRole('tab')).toHaveLength(2)
+    expect(within(inspectorSections).getByRole('tab', { name: /layer inspector/i })).toBeInTheDocument()
+    expect(within(inspectorSections).getByRole('tab', { name: /master inspector/i })).toBeInTheDocument()
+    expect(within(inspectorSections).queryByRole('tab', { name: /filter/i })).not.toBeInTheDocument()
+    expect(within(inspectorSections).queryByRole('tab', { name: /env/i })).not.toBeInTheDocument()
+    expect(within(layerSections).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Filter',
+      'Env',
+      'Layer',
+    ])
+
     expect(screen.getByRole('heading', { name: /layer inspector/i })).toBeInTheDocument()
-    expect(screen.getByText(/layer, envelope, and filter apply only to this layer\./i)).toBeInTheDocument()
-    expect(screen.getByText(/layer scope/i)).toBeInTheDocument()
+    expect(screen.queryByText(/layer, envelope, and filter apply only to this layer\./i)).not.toBeInTheDocument()
+    expect(screen.getByText(/layer scope/i).getAttribute('data-tooltip')).toMatch(
+      /layer, envelope, and filter apply only to this layer\./i,
+    )
     expect(screen.getByRole('button', { name: /^up$/i })).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /master inspector/i }))
 
     expect(screen.getByRole('heading', { name: /patch output/i })).toBeInTheDocument()
     expect(
-      screen.getByText(/master controls shape the final mix after all layers are combined\./i),
-    ).toBeInTheDocument()
-    expect(screen.getByText(/patch scope/i)).toBeInTheDocument()
+      screen.queryByText(/master controls shape the final mix after all layers are combined\./i),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText(/patch scope/i)).toHaveAttribute(
+      'data-tooltip',
+      'Master controls shape the final mix after all layers are combined.',
+    )
     expect(screen.queryByRole('button', { name: /^up$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: /layer inspector sections/i })).not.toBeInTheDocument()
   })
 
   it('previews the selected patch browser source when clicked', async () => {
@@ -421,7 +441,7 @@ describe('StudioPage', () => {
     await user.click(screen.getByRole('button', { name: /add layer/i }))
 
     await user.click(screen.getByRole('button', { name: /select layer 3 in timeline/i }))
-    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    await user.click(screen.getByRole('button', { name: /delete layer 3/i }))
 
     expect(screen.getByRole('status')).toHaveTextContent(/removed layer 3/i)
     expect(screen.getByRole('group', { name: /layer timeline/i })).not.toHaveTextContent(/layer 3/i)
