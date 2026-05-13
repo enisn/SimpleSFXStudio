@@ -54,6 +54,8 @@ This starts both the Vite client and the local API server.
 
 Set these on the server only. Do not prefix them with `VITE_`.
 
+For local development, copy `.env.example` to `.env`, fill in your key, then run the OpenAI check.
+
 ```bash
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=your-secret-key
@@ -61,6 +63,10 @@ OPENAI_MODEL=gpt-5-mini
 ```
 
 `OPENAI_MODEL` must support Chat Completions tool calling.
+
+```bash
+npm run test:openai
+```
 
 ### Build for production
 

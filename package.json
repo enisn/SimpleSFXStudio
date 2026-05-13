@@ -13,6 +13,7 @@
     "preview": "node server/index.js",
     "preview:static": "vite preview",
     "test": "vitest run",
+    "test:openai": "node scripts/check-openai.js",
     "test:watch": "vitest"
   },
   "dependencies": {
